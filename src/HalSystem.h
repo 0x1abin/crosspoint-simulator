@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 
@@ -18,4 +19,7 @@ void clearPanic();
 
 std::string getPanicInfo(bool full = false);
 bool isRebootFromPanic();
+
+using DeviceId = std::array<uint8_t, 6>;
+bool getDeviceId(DeviceId& out);
 } // namespace HalSystem
