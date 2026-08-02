@@ -40,6 +40,10 @@ int main() {
   }
   assert(random(0) == 0);
   assert(random(7, 7) == 7);
+  randomSeed(42);
+  const long seededRandom = random(1000);
+  randomSeed(42);
+  assert(random(1000) == seededRandom);
 
   IPAddress address(192, 168, 1, 2);
   assert(std::string(address.toString().c_str()) == "192.168.1.2");

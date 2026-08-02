@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
-#include <limits>
 #include <random>
 #include <string>
 #include <thread>
@@ -54,28 +53,23 @@ struct ESPMock {
 extern ESPMock ESP;
 
 namespace simulator_arduino_detail {
-struct RandomEngine {
-  using result_type = uint64_t;
-  static constexpr result_type min() { return 0; }
-  static constexpr result_type max() {
-    return std::numeric_limits<result_type>::max();
-  }
-  result_type operator()() const {
-    result_type value = 0;
-    esp_fill_random(&value, sizeof(value));
-    return value;
-  }
-};
+inline std::mt19937 &randomEngine() {
+  thread_local std::mt19937 engine{esp_random()};
+  return engine;
+}
 } // namespace simulator_arduino_detail
 
 inline long random(long max) {
   if (max <= 0)
     return 0;
-  simulator_arduino_detail::RandomEngine engine;
-  return std::uniform_int_distribution<long>(0, max - 1)(engine);
+  return std::uniform_int_distribution<long>(0, max - 1)(
+      simulator_arduino_detail::randomEngine());
 }
 inline long random(long min, long max) {
   return min < max ? min + random(max - min) : min;
+}
+inline void randomSeed(unsigned long seed) {
+  simulator_arduino_detail::randomEngine().seed(seed);
 }
 
 template <typename A, typename B>
