@@ -3,7 +3,10 @@
 #endif
 
 #include <Arduino.h>
+#include <BoardConfig.h>
+#include <EInkDisplay.h>
 #include <HalClock.h>
+#include <HalFrontlight.h>
 #include <IPAddress.h>
 #include <esp_http_client.h>
 #include <mbedtls/sha256.h>
@@ -29,9 +32,64 @@ esp_err_t captureHeader(esp_http_client_event_t *event) {
   capture->fields.emplace_back(event->header_key, event->header_value);
   return ESP_OK;
 }
+
+void testDeviceProfile() {
+#if defined(SIMULATOR_DEVICE_EEGO_A4)
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 768);
+  static_assert(EInkDisplay::DISPLAY_HEIGHT == 552);
+  static_assert(EInkDisplay::DISPLAY_WIDTH * EInkDisplay::DISPLAY_HEIGHT / 8 ==
+                52992);
+  assert(std::strcmp(BoardConfig::ACTIVE.name, "eego_a4") == 0);
+  assert(BoardConfig::hasTouch());
+  assert(BoardConfig::hasHomeKey());
+  assert(!BoardConfig::hasPwmFrontlight());
+#elif defined(SIMULATOR_DEVICE_MOFEI_M4)
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 800);
+  static_assert(EInkDisplay::DISPLAY_HEIGHT == 480);
+  static_assert(EInkDisplay::DISPLAY_WIDTH * EInkDisplay::DISPLAY_HEIGHT / 8 ==
+                48000);
+  assert(std::strcmp(BoardConfig::ACTIVE.name, "mofei_m4") == 0);
+  assert(BoardConfig::hasTouch());
+  assert(!BoardConfig::hasHomeKey());
+  assert(BoardConfig::hasPwmFrontlight());
+#elif defined(SIMULATOR_DEVICE_X4_PRO)
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 800);
+  static_assert(EInkDisplay::DISPLAY_HEIGHT == 480);
+  static_assert(EInkDisplay::DISPLAY_WIDTH * EInkDisplay::DISPLAY_HEIGHT / 8 ==
+                48000);
+  assert(std::strcmp(BoardConfig::ACTIVE.name, "xteink_x4_pro") == 0);
+  assert(BoardConfig::hasTouch());
+  assert(BoardConfig::hasHomeKey());
+  assert(BoardConfig::hasPwmFrontlight());
+#elif defined(SIMULATOR_DEVICE_X3)
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 792);
+  static_assert(EInkDisplay::DISPLAY_HEIGHT == 528);
+  assert(std::strcmp(BoardConfig::ACTIVE.name, "xteink_x3") == 0);
+  assert(!BoardConfig::hasTouch());
+  assert(!BoardConfig::hasHomeKey());
+  assert(!BoardConfig::hasPwmFrontlight());
+#else
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 800);
+  static_assert(EInkDisplay::DISPLAY_HEIGHT == 480);
+  static_assert(EInkDisplay::DISPLAY_WIDTH * EInkDisplay::DISPLAY_HEIGHT / 8 ==
+                48000);
+  assert(std::strcmp(BoardConfig::ACTIVE.name, "xteink_x4") == 0);
+  assert(!BoardConfig::hasTouch());
+  assert(!BoardConfig::hasHomeKey());
+  assert(!BoardConfig::hasPwmFrontlight());
+#endif
+
+  auto &frontlight = HalFrontlight::getInstance();
+  frontlight.begin(70, 30, true);
+  assert(frontlight.present() == BoardConfig::hasPwmFrontlight());
+  assert(frontlight.hasColorTemperature() ==
+         BoardConfig::hasColorTemperatureFrontlight());
+  assert(frontlight.isOn() == BoardConfig::hasPwmFrontlight());
+}
 } // namespace
 
 int main() {
+  testDeviceProfile();
   std::array<uint8_t, 32> randomBytes{};
   esp_fill_random(randomBytes.data(), randomBytes.size());
   for (int i = 0; i < 32; ++i) {
@@ -53,6 +111,12 @@ int main() {
 
   HalClock clock;
   clock.begin();
+#if defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO) ||        \
+    defined(SIMULATOR_DEVICE_EEGO_A4) || defined(SIMULATOR_DEVICE_MOFEI_M4)
+  assert(clock.isAvailable());
+#else
+  assert(!clock.isAvailable());
+#endif
   assert(clock.hasValidTime());
   assert(clock.syncState() == ClockSyncState::Idle);
   clock.update();

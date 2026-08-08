@@ -56,9 +56,14 @@ extend the base simulator environment with one of these flags:
 - `-DSIMULATOR_DEVICE_X4_PRO` keeps the X4 family's 800x480 framebuffer and
   selects the X4 Pro board profile. It exposes touch and swipe input, the
   capacitive Home key, the RTC, display inversion, and frontlight state.
+- `-DSIMULATOR_DEVICE_EEGO_A4` selects the 768x552 eego A4 profile with touch,
+  the capacitive Home/Back key, RTC, and its symmetric viewable margin.
+- `-DSIMULATOR_DEVICE_MOFEI_M4` selects the 800x480 Mofei M4 profile with
+  touch, RTC, and warm/cool frontlight state.
 
 The sample PlatformIO files include ready-to-use `simulator_x3` and
-`simulator_x4_pro` environments.
+`simulator_x4_pro`, `simulator_eego_a4`, and `simulator_mofei_m4`
+environments.
 
 By default, the simulator keeps its own `JPEGDEC`, `PNGdec`, and QRCode compatibility shims so existing firmware projects can update this library without changing their simulator environment. To test against the native decoder libraries instead, follow the opt-in comments in the sample PlatformIO files: define `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, set `lib_compat_mode = off`, change simulator `lib_ignore` to `hal, WebSockets`, and add the native `PNGdec`/`JPEGDEC` dependencies. `WebSockets` is ignored only in native simulator builds because this repo supplies the host-backed `WebSocketsServer` implementation.
 
@@ -133,10 +138,14 @@ tests/run_host_compat_self_test.sh
 | Escape | Back                               |
 | P      | Power                              |
 | S      | Simulate sleep                     |
-| H      | X4 Pro capacitive Home key         |
-| Mouse  | X4 Pro touch, tap, and swipe       |
+| H      | X4 Pro/eego A4 Home key            |
+| Mouse  | Touch-device tap, drag, and swipe  |
 
-When the simulator is on the sleep screen, pressing any mapped simulator key wakes it. Under the hood the simulator relaunches itself and reports a synthetic power-button wake, because the native build has no real ESP deep-sleep resume path.
+When the simulator is on the sleep screen, A4 and M4 accept only Power as a
+wake source; existing profiles retain their generic mapped-key wake behavior.
+Under the hood the simulator relaunches itself and reports a synthetic
+power-button wake, because the native build has no real ESP deep-sleep resume
+path.
 
 ## Automated QA and screenshots
 
@@ -148,7 +157,7 @@ tests possible without desktop-control permissions:
   `<key>[:<hold-milliseconds>]`; keys are `BACK`, `ENTER`, `LEFT`, `RIGHT`,
   `UP`, `DOWN`, `POWER`, `SLEEP`, `HOME`, and `QUIT`. A normal key press is
   held for 80 ms unless a duration is provided.
-- X4 Pro touch actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
+- Touch-device actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
   `SWIPE:<x1>,<y1>,<x2>,<y2>[,<duration-milliseconds>]`. Coordinates are in
   displayed logical pixels, so they match UI layouts and screenshots after the
   firmware changes orientation. Normalized coordinates from 0.0 to 1.0 are
