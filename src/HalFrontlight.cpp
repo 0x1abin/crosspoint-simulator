@@ -16,16 +16,17 @@ void HalFrontlight::begin(uint8_t brightness, uint8_t warmth, bool on) {
   lastBrightness = std::min<uint8_t>(brightness, 100);
   lastWarmth = std::min<uint8_t>(warmth, 100);
   lit = on;
-  std::cerr << "[SIM] X4 Pro frontlight: " << (lit ? "on" : "off")
+  std::cerr << "[SIM] " << BoardConfig::ACTIVE.name
+            << " frontlight: " << (lit ? "on" : "off")
             << ", brightness=" << static_cast<unsigned>(lastBrightness)
             << "%, warmth=" << static_cast<unsigned>(lastWarmth) << "%"
             << std::endl;
 }
 
-bool HalFrontlight::present() const { return BoardConfig::isX4Pro(); }
+bool HalFrontlight::present() const { return BoardConfig::hasPwmFrontlight(); }
 
 bool HalFrontlight::hasColorTemperature() const {
-  return BoardConfig::isX4Pro();
+  return BoardConfig::hasColorTemperatureFrontlight();
 }
 
 void HalFrontlight::setBrightness(uint8_t percent) {

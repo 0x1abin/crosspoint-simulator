@@ -18,7 +18,8 @@ bool toUtc(const std::time_t epoch, std::tm &result) {
 } // namespace
 
 void HalClock::begin() {
-#if defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO)
+#if defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO) ||        \
+    defined(SIMULATOR_DEVICE_EEGO_A4) || defined(SIMULATOR_DEVICE_MOFEI_M4)
   _available = true;
 #else
   _available = false;

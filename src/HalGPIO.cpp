@@ -204,6 +204,8 @@ void endHomeKey() {
   if (!homeKeyLongFired &&
       SDL_GetTicks() - homeKeyPressedAt < HOME_KEY_LONG_PRESS_MS) {
     homeKeyTappedThisFrame = true;
+    pressedThisFrame[HalGPIO::BTN_BACK] = true;
+    releasedThisFrame[HalGPIO::BTN_BACK] = true;
   }
   homeKeyDown = false;
 }
@@ -285,6 +287,13 @@ int namedButton(const std::string &name) {
   if (name == "P" || name == "POWER")
     return HalGPIO::BTN_POWER;
   return -1;
+}
+
+bool canWakeFromButton(int button) {
+  const auto board = BoardConfig::ACTIVE.board;
+  const bool powerOnly = board == BoardConfig::Board::EegoA4 ||
+                         board == BoardConfig::Board::MofeiM4;
+  return !powerOnly || button == HalGPIO::BTN_POWER;
 }
 
 void initializeSyntheticEvents() {
@@ -435,7 +444,13 @@ static int scancodeToButton(SDL_Scancode sc) {
 }
 
 void HalGPIO::begin() {
-#if defined(SIMULATOR_DEVICE_X4_PRO)
+#if defined(SIMULATOR_DEVICE_EEGO_A4)
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::EegoA4);
+#elif defined(SIMULATOR_DEVICE_MOFEI_M4)
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::MofeiM4);
+#elif defined(SIMULATOR_DEVICE_X4_PRO)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::XteinkX4Pro);
 #elif defined(SIMULATOR_DEVICE_X3)
@@ -456,7 +471,9 @@ bool HalGPIO::isXteinkDevice() const {
 
 bool HalGPIO::hasEdgeSideButtons() const {
   return BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3 ||
-         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Pro;
+         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Pro ||
+         BoardConfig::ACTIVE.board == BoardConfig::Board::EegoA4 ||
+         BoardConfig::ACTIVE.board == BoardConfig::Board::MofeiM4;
 }
 
 void HalGPIO::beginFrame() {
@@ -701,7 +718,7 @@ void HalGPIO::startDeepSleep() {
     if (quitRequested.load())
       return;
     for (int button = 0; button < NUM_BUTTONS; button++) {
-      if (syntheticButtonDown[button]) {
+      if (syntheticButtonDown[button] && canWakeFromButton(button)) {
         clearButtonState();
         SimulatorLifecycle::rebootAsPowerWake();
       }
@@ -714,10 +731,12 @@ void HalGPIO::startDeepSleep() {
         return;
       }
 
-      if (e.type == SDL_KEYDOWN && !e.key.repeat &&
-          scancodeToButton(e.key.keysym.scancode) >= 0) {
-        clearButtonState();
-        SimulatorLifecycle::rebootAsPowerWake();
+      if (e.type == SDL_KEYDOWN && !e.key.repeat) {
+        const int button = scancodeToButton(e.key.keysym.scancode);
+        if (button >= 0 && canWakeFromButton(button)) {
+          clearButtonState();
+          SimulatorLifecycle::rebootAsPowerWake();
+        }
       }
     }
 
