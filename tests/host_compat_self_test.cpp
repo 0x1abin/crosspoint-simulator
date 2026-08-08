@@ -7,6 +7,8 @@
 #include <EInkDisplay.h>
 #include <HalClock.h>
 #include <HalFrontlight.h>
+#include <HalStorage.h>
+#include <HalSystem.h>
 #include <IPAddress.h>
 #include <esp_http_client.h>
 #include <mbedtls/sha256.h>
@@ -19,6 +21,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+ESPMock ESP;
 
 namespace {
 struct HeaderCapture {
@@ -86,10 +90,37 @@ void testDeviceProfile() {
          BoardConfig::hasColorTemperatureFrontlight());
   assert(frontlight.isOn() == BoardConfig::hasPwmFrontlight());
 }
+
+void testSystemInfo() {
+  const HalSystem::HeapInfo heap = HalSystem::getHeapInfo();
+  assert(heap.freeBytes == ESP.getFreeHeap());
+  assert(heap.totalBytes == ESP.getHeapSize());
+  assert(heap.largestFreeBlockBytes == ESP.getMaxAllocHeap());
+
+  char storageRoot[] = "/tmp/crosspoint-simulator-storage.XXXXXX";
+  assert(mkdtemp(storageRoot));
+  assert(setenv("CROSSPOINT_SIM_SD", storageRoot, 1) == 0);
+
+  uint64_t totalBytes = 1;
+  uint64_t freeBytes = 1;
+  assert(Storage.getSpace(totalBytes, freeBytes));
+  assert(totalBytes > 0);
+  assert(freeBytes <= totalBytes);
+
+  const std::string missingRoot = std::string(storageRoot) + "/missing";
+  assert(setenv("CROSSPOINT_SIM_SD", missingRoot.c_str(), 1) == 0);
+  assert(!Storage.getSpace(totalBytes, freeBytes));
+  assert(totalBytes == 0);
+  assert(freeBytes == 0);
+
+  assert(unsetenv("CROSSPOINT_SIM_SD") == 0);
+  assert(rmdir(storageRoot) == 0);
+}
 } // namespace
 
 int main() {
   testDeviceProfile();
+  testSystemInfo();
   std::array<uint8_t, 32> randomBytes{};
   esp_fill_random(randomBytes.data(), randomBytes.size());
   for (int i = 0; i < 32; ++i) {

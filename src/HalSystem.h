@@ -10,6 +10,12 @@ struct StackFrame {
   uint32_t spp[8];
 };
 
+struct HeapInfo {
+  uint32_t freeBytes;
+  uint32_t totalBytes;
+  uint32_t largestFreeBlockBytes;
+};
+
 void begin();
 void restart();
 
@@ -22,4 +28,5 @@ bool isRebootFromPanic();
 
 using DeviceId = std::array<uint8_t, 6>;
 bool getDeviceId(DeviceId& out);
+HeapInfo getHeapInfo();
 } // namespace HalSystem

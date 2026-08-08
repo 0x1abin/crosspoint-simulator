@@ -19,6 +19,7 @@ public:
   HalStorage();
   bool begin();
   bool ready() const;
+  bool getSpace(uint64_t &totalBytes, uint64_t &freeBytes);
   std::vector<String> listFiles(const char *path = "/", int maxFiles = 200);
   // Read the entire file at `path` into a String. Returns empty string on
   // failure.

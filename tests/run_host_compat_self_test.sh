@@ -12,6 +12,8 @@ compile=(
   "$repo_root/tests/host_compat_self_test.cpp"
   "$repo_root/src/HalClock.cpp"
   "$repo_root/src/HalFrontlight.cpp"
+  "$repo_root/src/HalStorage.cpp"
+  "$repo_root/src/HalSystem.cpp"
 )
 if [[ -n "${LDFLAGS:-}" ]]; then
   read -r -a extra_link_flags <<< "$LDFLAGS"
