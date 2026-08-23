@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 
@@ -7,6 +8,12 @@ namespace HalSystem {
 struct StackFrame {
   uint32_t sp;
   uint32_t spp[8];
+};
+
+struct HeapInfo {
+  uint32_t freeBytes;
+  uint32_t totalBytes;
+  uint32_t largestFreeBlockBytes;
 };
 
 void begin();
@@ -18,4 +25,8 @@ void clearPanic();
 
 std::string getPanicInfo(bool full = false);
 bool isRebootFromPanic();
+
+using DeviceId = std::array<uint8_t, 6>;
+bool getDeviceId(DeviceId& out);
+HeapInfo getHeapInfo();
 } // namespace HalSystem

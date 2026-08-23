@@ -12,7 +12,7 @@ A desktop simulator for [CrossPoint](https://github.com/crosspoint-reader/crossp
 
 ## Prerequisites
 
-SDL2 and `curl` must be installed on the host machine. Linux/WSL users also need OpenSSL development headers for MD5 support.
+SDL2 and `curl` must be installed on the host machine. Linux/WSL users also need OpenSSL development headers for hashing support.
 
 ```bash
 # macOS
@@ -35,7 +35,8 @@ Add the simulator to your firmware's platformio.ini as a `lib_dep` and configure
 - `sample-platformio-macos.ini`
 - `sample-platformio-linux-wsl.ini`
 
-No scripts need to be copied into the firmware repo for the simulator to build. The simulator library automatically patches consumer-side compatibility issues from its own build script when PlatformIO fetches it as a dependency, including the common `GfxRenderer::setOrientation()` hook needed for SDL window resizing.
+No scripts need to be copied into the firmware repo. PlatformIO loads the
+library's build hook automatically, which registers the `run_simulator` target.
 
 Keep the sample `build_src_filter` exclusions unless your firmware has already
 moved those files behind simulator guards. In the current CrossPoint layout,
@@ -43,6 +44,9 @@ the firmware-owned `CrossPointWebServer` and `WebDAVHandler` compile against
 the simulator's lower-level `WebServer`, `WebSocketsServer`, and
 `NetworkClient` shims. This exercises the real settings, files, status, and
 WebDAV routes instead of a reduced simulator-only substitute.
+
+If the consuming firmware's `OtaUpdater::checkForUpdate` accepts a `Channel`,
+define `CROSSPOINT_SIMULATOR_OTA_CHANNELS=1` in the simulator environment.
 
 The simulator defaults to the X4 panel shape. Device-specific environments can
 extend the base simulator environment with one of these flags:
@@ -52,19 +56,15 @@ extend the base simulator environment with one of these flags:
 - `-DSIMULATOR_DEVICE_X4_PRO` keeps the X4 family's 800x480 framebuffer and
   selects the X4 Pro board profile. It exposes touch and swipe input, the
   capacitive Home key, the RTC, display inversion, and frontlight state.
+- `-DSIMULATOR_DEVICE_EEGO_A4` selects the 768x552 eego A4 profile with touch,
+  the capacitive Home/Back key, RTC, and its symmetric viewable margin.
+- `-DSIMULATOR_DEVICE_MOFEI_M4` selects the 800x480 Mofei M4 profile with
+  touch, RTC, and warm/cool frontlight state.
 
 The sample PlatformIO files include ready-to-use `simulator_x3` and
-`simulator_x4_pro` environments.
+`simulator_x4_pro`, `simulator_eego_a4`, and `simulator_mofei_m4`
+environments.
 
-If a fork has a custom renderer and the auto-patch cannot recognize it, its simulator build should notify the display when orientation changes:
-
-```cpp
-#ifdef SIMULATOR
-display.setSimulatorOrientation(static_cast<int>(o));
-#endif
-```
-
-Put that in the renderer's orientation setter after updating the renderer's own orientation state.
 By default, the simulator keeps its own `JPEGDEC`, `PNGdec`, and QRCode compatibility shims so existing firmware projects can update this library without changing their simulator environment. To test against the native decoder libraries instead, follow the opt-in comments in the sample PlatformIO files: define `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, set `lib_compat_mode = off`, change simulator `lib_ignore` to `hal, WebSockets`, and add the native `PNGdec`/`JPEGDEC` dependencies. `WebSockets` is ignored only in native simulator builds because this repo supplies the host-backed `WebSocketsServer` implementation.
 
 If you only want a self-contained simulator dependency, stop there.
@@ -120,6 +120,14 @@ Run this command from the Crosspoint project after you have added the `[env:simu
 pio run -e simulator -t run_simulator
 ```
 
+## Host compatibility self-test
+
+Run the dependency-free host check after changing clock, hashing, or HTTP shims:
+
+```bash
+tests/run_host_compat_self_test.sh
+```
+
 ## Controls
 
 | Key    | Action                             |
@@ -130,10 +138,14 @@ pio run -e simulator -t run_simulator
 | Escape | Back                               |
 | P      | Power                              |
 | S      | Simulate sleep                     |
-| H      | X4 Pro capacitive Home key         |
-| Mouse  | X4 Pro touch, tap, and swipe       |
+| H      | X4 Pro/eego A4 Home key            |
+| Mouse  | Touch-device tap, drag, and swipe  |
 
-When the simulator is on the sleep screen, pressing any mapped simulator key wakes it. Under the hood the simulator relaunches itself and reports a synthetic power-button wake, because the native build has no real ESP deep-sleep resume path.
+When the simulator is on the sleep screen, A4 and M4 accept only Power as a
+wake source; existing profiles retain their generic mapped-key wake behavior.
+Under the hood the simulator relaunches itself and reports a synthetic
+power-button wake, because the native build has no real ESP deep-sleep resume
+path.
 
 ## Automated QA and screenshots
 
@@ -145,7 +157,7 @@ tests possible without desktop-control permissions:
   `<key>[:<hold-milliseconds>]`; keys are `BACK`, `ENTER`, `LEFT`, `RIGHT`,
   `UP`, `DOWN`, `POWER`, `SLEEP`, `HOME`, and `QUIT`. A normal key press is
   held for 80 ms unless a duration is provided.
-- X4 Pro touch actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
+- Touch-device actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
   `SWIPE:<x1>,<y1>,<x2>,<y2>[,<duration-milliseconds>]`. Coordinates are in
   displayed logical pixels, so they match UI layouts and screenshots after the
   firmware changes orientation. Normalized coordinates from 0.0 to 1.0 are

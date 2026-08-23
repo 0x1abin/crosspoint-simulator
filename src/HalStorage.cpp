@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -88,6 +89,30 @@ bool HalStorage::begin() {
   return ::mkdir(root.c_str(), 0777) == 0 || errno == EEXIST;
 }
 bool HalStorage::ready() const { return true; }
+
+bool HalStorage::getSpace(uint64_t &totalBytes, uint64_t &freeBytes) {
+  totalBytes = 0;
+  freeBytes = 0;
+
+  struct statvfs space {};
+  if (::statvfs(configuredStorageRoot().c_str(), &space) != 0)
+    return false;
+
+  const uint64_t blockSize = space.f_frsize ? space.f_frsize : space.f_bsize;
+  const uint64_t maxBytes = std::numeric_limits<uint64_t>::max();
+  if (blockSize == 0 || space.f_blocks > maxBytes / blockSize ||
+      space.f_bavail > maxBytes / blockSize)
+    return false;
+
+  const uint64_t total = space.f_blocks * blockSize;
+  const uint64_t free = space.f_bavail * blockSize;
+  if (total == 0 || free > total)
+    return false;
+
+  totalBytes = total;
+  freeBytes = free;
+  return true;
+}
 
 class HalFile::Impl {
 public:
@@ -443,7 +468,12 @@ bool HalStorage::openFileForRead(const char *moduleName, const String &path,
 }
 bool HalStorage::openFileForWrite(const char *moduleName, const char *path,
                                   HalFile &file) {
-  file = open(path, O_WRONLY | O_CREAT | O_TRUNC);
+  // O_RDWR, not O_WRONLY, to match SDCardManager::openFileForWrite on device
+  // (O_RDWR | O_CREAT | O_TRUNC). Firmware reads back from a write handle while
+  // it is still open -- Section::loadPageDuringBuild seeks into the .bin it is
+  // building to render an already-written page. On a write-only fd that read
+  // fails and the page renders blank.
+  file = open(path, O_RDWR | O_CREAT | O_TRUNC);
   return file.isOpen();
 }
 bool HalStorage::openFileForWrite(const char *moduleName,

@@ -262,7 +262,11 @@ static void applyWindowGeometryIfNeeded(GfxRenderer::Orientation orientation) {
 HalDisplay::HalDisplay() {}
 HalDisplay::~HalDisplay() {}
 
-#if defined(SIMULATOR_DEVICE_X4_PRO)
+#if defined(SIMULATOR_DEVICE_EEGO_A4)
+static constexpr const char *WINDOW_TITLE = "Simulator - eego A4";
+#elif defined(SIMULATOR_DEVICE_MOFEI_M4)
+static constexpr const char *WINDOW_TITLE = "Simulator - Mofei M4";
+#elif defined(SIMULATOR_DEVICE_X4_PRO)
 static constexpr const char *WINDOW_TITLE = "Simulator - XTEINK X4 Pro";
 #elif defined(SIMULATOR_DEVICE_X3)
 static constexpr const char *WINDOW_TITLE = "Simulator - XTEINK X3";
