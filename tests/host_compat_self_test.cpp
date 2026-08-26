@@ -92,6 +92,8 @@ void testDeviceProfile() {
 }
 
 void testSystemInfo() {
+  assert(std::strcmp(HalSystem::getDeviceModel(), BoardConfig::ACTIVE.name) ==
+         0);
   const HalSystem::HeapInfo heap = HalSystem::getHeapInfo();
   assert(heap.freeBytes == ESP.getFreeHeap());
   assert(heap.totalBytes == ESP.getHeapSize());

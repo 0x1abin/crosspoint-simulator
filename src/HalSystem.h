@@ -27,6 +27,7 @@ std::string getPanicInfo(bool full = false);
 bool isRebootFromPanic();
 
 using DeviceId = std::array<uint8_t, 6>;
+const char *getDeviceModel();
 bool getDeviceId(DeviceId& out);
 HeapInfo getHeapInfo();
 } // namespace HalSystem
