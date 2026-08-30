@@ -37,6 +37,7 @@ static constexpr SDL_Scancode HOME_KEY_SCANCODE = SDL_SCANCODE_H;
 static constexpr int TOUCH_TAP_SLOP_PX = 28;
 static constexpr int TOUCH_SWIPE_MIN_PX = 60;
 static constexpr unsigned long TOUCH_SWIPE_MAX_MS = 700;
+static constexpr unsigned long TOUCH_LONG_PRESS_MS = 500;
 static constexpr unsigned long HOME_KEY_LONG_PRESS_MS = 700;
 
 static const SDL_Scancode buttonScancode[NUM_BUTTONS] = {
@@ -62,6 +63,9 @@ struct TouchState {
   bool pressedThisFrame = false;
   bool releasedThisFrame = false;
   bool movedBeyondTapSlop = false;
+  bool longPressThisFrame = false;
+  bool longPressFired = false;
+  bool suppressed = false;
   bool activityThisFrame = false;
   float startNx = 0.0f;
   float startNy = 0.0f;
@@ -163,6 +167,9 @@ void beginTouch(float logicalNx, float logicalNy) {
   touchState.pressedThisFrame = true;
   touchState.activityThisFrame = true;
   touchState.movedBeyondTapSlop = false;
+  touchState.longPressThisFrame = false;
+  touchState.longPressFired = false;
+  touchState.suppressed = false;
   touchState.startNx = panelNx;
   touchState.startNy = panelNy;
   touchState.currentNx = panelNx;
@@ -187,6 +194,15 @@ void endTouch(float logicalNx, float logicalNy) {
   touchState.releasedThisFrame = true;
   touchState.activityThisFrame = true;
   touchState.lastHeldMs = SDL_GetTicks() - touchState.pressedAt;
+}
+
+void updateTouchHold() {
+  if (touchState.down && !touchState.movedBeyondTapSlop &&
+      !touchState.longPressFired && !touchState.suppressed &&
+      SDL_GetTicks() - touchState.pressedAt >= TOUCH_LONG_PRESS_MS) {
+    touchState.longPressFired = true;
+    touchState.longPressThisFrame = true;
+  }
 }
 
 void beginHomeKey() {
@@ -292,7 +308,7 @@ int namedButton(const std::string &name) {
 bool canWakeFromButton(int button) {
   const auto board = BoardConfig::ACTIVE.board;
   const bool powerOnly = board == BoardConfig::Board::EegoA4 ||
-                         board == BoardConfig::Board::MofeiM4;
+                         BoardConfig::isMurphyM4();
   return !powerOnly || button == HalGPIO::BTN_POWER;
 }
 
@@ -447,15 +463,30 @@ void HalGPIO::begin() {
 #if defined(SIMULATOR_DEVICE_EEGO_A4)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::EegoA4);
+#elif defined(SIMULATOR_DEVICE_MURPHY_M4)
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::MurphyM4);
 #elif defined(SIMULATOR_DEVICE_MOFEI_M4)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::MofeiM4);
+#elif defined(SIMULATOR_DEVICE_PAPERMONO)
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::PaperMono);
+#elif defined(SIMULATOR_DEVICE_STICKY)
+  // The firmware's non-C3 path leaves the legacy device discriminator on X4;
+  // BoardConfig carries the actual Sticky identity and capabilities.
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::Sticky);
 #elif defined(SIMULATOR_DEVICE_X4_PRO)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::XteinkX4Pro);
 #elif defined(SIMULATOR_DEVICE_X3)
   _deviceType = DeviceType::X3;
+#if defined(SIMULATOR_DISPLAY_UC8279)
+  BoardConfig::selectDevice(BoardConfig::Board::XteinkX3Uc8279);
+#else
   BoardConfig::selectDevice(BoardConfig::Board::XteinkX3);
+#endif
 #else
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::XteinkX4);
@@ -466,14 +497,16 @@ bool HalGPIO::isXteinkDevice() const {
   // Match the firmware helper's narrower meaning: the runtime-detected C3
   // X3/X4 pair. X4 Pro is an Xteink product but uses its own S3 board profile.
   return BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3 ||
+         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3Uc8279 ||
          BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4;
 }
 
 bool HalGPIO::hasEdgeSideButtons() const {
   return BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3 ||
+         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3Uc8279 ||
          BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Pro ||
          BoardConfig::ACTIVE.board == BoardConfig::Board::EegoA4 ||
-         BoardConfig::ACTIVE.board == BoardConfig::Board::MofeiM4;
+         BoardConfig::isMurphyM4();
 }
 
 void HalGPIO::beginFrame() {
@@ -486,6 +519,7 @@ void HalGPIO::beginFrame() {
   touchState.pressedThisFrame = false;
   touchState.releasedThisFrame = false;
   touchState.activityThisFrame = false;
+  touchState.longPressThisFrame = false;
   homeKeyPressedThisFrame = false;
   homeKeyTappedThisFrame = false;
   homeKeyLongPressedThisFrame = false;
@@ -560,6 +594,7 @@ void HalGPIO::update() {
     }
   }
   processSyntheticEvents();
+  updateTouchHold();
   updateHomeKeyHold();
 }
 
@@ -635,7 +670,8 @@ bool HalGPIO::wasHomeKeyLongPressed() const {
 }
 
 bool HalGPIO::wasTouchTap(float &nx, float &ny) const {
-  if (!touchState.releasedThisFrame || touchState.movedBeyondTapSlop)
+  if (!touchState.releasedThisFrame || touchState.movedBeyondTapSlop ||
+      touchState.suppressed)
     return false;
   nx = touchState.startNx;
   ny = touchState.startNy;
@@ -654,7 +690,8 @@ bool HalGPIO::wasTouchReleased() const { return touchState.releasedThisFrame; }
 
 bool HalGPIO::isTouchTapCandidate(float &nx, float &ny,
                                   unsigned long &heldMs) const {
-  if (!touchState.down || touchState.movedBeyondTapSlop) {
+  if (!touchState.down || touchState.movedBeyondTapSlop ||
+      touchState.suppressed) {
     heldMs = 0;
     return false;
   }
@@ -665,18 +702,33 @@ bool HalGPIO::isTouchTapCandidate(float &nx, float &ny,
 }
 
 bool HalGPIO::isTouchHeldAt(float &nx, float &ny) const {
-  if (!touchState.down)
+  if (!touchState.down || touchState.suppressed)
     return false;
   nx = touchState.currentNx;
   ny = touchState.currentNy;
   return true;
 }
 
+bool HalGPIO::wasTouchLongPress(float &nx, float &ny) const {
+  if (!touchState.longPressThisFrame || touchState.suppressed)
+    return false;
+  nx = touchState.startNx;
+  ny = touchState.startNy;
+  return true;
+}
+
+void HalGPIO::suppressTouchContact() {
+  if (touchState.down || touchState.releasedThisFrame)
+    touchState.suppressed = true;
+}
+
+bool HalGPIO::restoreTouchAfterDisplayReset() { return true; }
+
 unsigned long HalGPIO::lastTouchHeldMs() const { return touchState.lastHeldMs; }
 
 bool HalGPIO::wasSwipe(float &nxStart, float &nyStart, float &nxEnd,
                        float &nyEnd) const {
-  if (!touchState.releasedThisFrame ||
+  if (!touchState.releasedThisFrame || touchState.suppressed ||
       touchState.lastHeldMs > TOUCH_SWIPE_MAX_MS)
     return false;
   const float dx =
@@ -743,9 +795,10 @@ void HalGPIO::startDeepSleep() {
     SDL_Delay(10);
   }
 }
+bool HalGPIO::verifyPowerButtonWakeup() { return true; }
 bool HalGPIO::verifyPowerButtonWakeup(uint16_t /*requiredDurationMs*/,
                                       bool /*shortPressAllowed*/) {
-  return true;
+  return verifyPowerButtonWakeup();
 }
 
 HalGPIO gpio;

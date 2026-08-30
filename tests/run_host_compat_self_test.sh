@@ -23,7 +23,8 @@ if [[ "$(uname -s)" == "Linux" ]]; then
   compile+=(-lcrypto)
 fi
 for device in DEFAULT SIMULATOR_DEVICE_X3 SIMULATOR_DEVICE_X4_PRO \
-  SIMULATOR_DEVICE_EEGO_A4 SIMULATOR_DEVICE_MOFEI_M4; do
+  SIMULATOR_DEVICE_EEGO_A4 SIMULATOR_DEVICE_MURPHY_M4 \
+  SIMULATOR_DEVICE_MOFEI_M4; do
   device_compile=("${CXX:-c++}" "${compile[@]}")
   if [[ "$device" != DEFAULT ]]; then
     device_compile+=("-D$device")

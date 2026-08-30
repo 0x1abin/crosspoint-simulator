@@ -1,5 +1,6 @@
 #include "HalDisplay.h"
 
+#include <BoardConfig.h>
 #include <GfxRenderer.h>
 #include <SDL.h>
 
@@ -8,7 +9,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 static SDL_Window *window = nullptr;
@@ -23,6 +26,7 @@ static constexpr int SIMULATOR_WINDOW_SCALE = 1;
 // SDL_RenderPresent. On macOS, SDL calls must happen on the main thread.
 static uint32_t
     pixelBuf[HalDisplay::DISPLAY_WIDTH * HalDisplay::DISPLAY_HEIGHT];
+static std::mutex pixelBufMutex;
 static std::atomic<bool> pendingPresent{false};
 // Written by HalGPIO::update() (which owns SDL event polling); read by
 // shouldQuit().
@@ -59,6 +63,7 @@ struct ScreenshotEvent {
 
 std::vector<ScreenshotEvent> screenshotEvents;
 bool screenshotEventsInitialized = false;
+const std::thread::id simulatorMainThread = std::this_thread::get_id();
 
 void initializeScreenshotEvents() {
   if (screenshotEventsInitialized)
@@ -157,6 +162,7 @@ bool getBit(const uint8_t *buffer, int x, int y) {
 }
 
 void renderBwPixels(const uint8_t *fb) {
+  const std::lock_guard<std::mutex> lock(pixelBufMutex);
   const bool invert = display.isInverted();
   for (int y = 0; y < HalDisplay::DISPLAY_HEIGHT; y++) {
     for (int x = 0; x < HalDisplay::DISPLAY_WIDTH; x++) {
@@ -193,6 +199,7 @@ void copyPlane(std::array<uint8_t, HalDisplay::BUFFER_SIZE> &dst,
 }
 
 void composeGrayscalePreview() {
+  const std::lock_guard<std::mutex> lock(pixelBufMutex);
   const uint8_t *bwBase = grayscalePreviewState.bwBaseValid
                               ? grayscalePreviewState.bwBase.data()
                               : display.getFrameBuffer();
@@ -262,17 +269,41 @@ static void applyWindowGeometryIfNeeded(GfxRenderer::Orientation orientation) {
 HalDisplay::HalDisplay() {}
 HalDisplay::~HalDisplay() {}
 
-#if defined(SIMULATOR_DEVICE_EEGO_A4)
-static constexpr const char *WINDOW_TITLE = "Simulator - eego A4";
-#elif defined(SIMULATOR_DEVICE_MOFEI_M4)
-static constexpr const char *WINDOW_TITLE = "Simulator - Mofei M4";
-#elif defined(SIMULATOR_DEVICE_X4_PRO)
-static constexpr const char *WINDOW_TITLE = "Simulator - XTEINK X4 Pro";
-#elif defined(SIMULATOR_DEVICE_X3)
-static constexpr const char *WINDOW_TITLE = "Simulator - XTEINK X3";
+#if defined(SIMULATOR_DISPLAY_UC8179)
+#define SIMULATOR_CONTROLLER_TITLE "UC8179"
+#elif defined(SIMULATOR_DISPLAY_UC8279)
+#define SIMULATOR_CONTROLLER_TITLE "UC8279"
 #else
-static constexpr const char *WINDOW_TITLE = "Simulator - XTEINK X4";
+#define SIMULATOR_CONTROLLER_TITLE "SSD1677"
 #endif
+
+#if defined(SIMULATOR_DEVICE_EEGO_A4)
+static constexpr const char *WINDOW_TITLE = "Simulator - eego A4 (UC8279C)";
+#elif defined(SIMULATOR_DEVICE_MURPHY_M4)
+static constexpr const char *WINDOW_TITLE = "Simulator - Murphy M4 (SSD1677)";
+#elif defined(SIMULATOR_DEVICE_MOFEI_M4)
+static constexpr const char *WINDOW_TITLE = "Simulator - Mofei M4 (SSD1677)";
+#elif defined(SIMULATOR_DEVICE_PAPERMONO)
+static constexpr const char *WINDOW_TITLE =
+    "Simulator - M5Stack PaperMono (SSD1677)";
+#elif defined(SIMULATOR_DEVICE_STICKY)
+static constexpr const char *WINDOW_TITLE =
+    "Simulator - Seeed Sticky (SSD1677)";
+#elif defined(SIMULATOR_DEVICE_X4_PRO)
+static constexpr const char *WINDOW_TITLE =
+    "Simulator - XTEINK X4 Pro (" SIMULATOR_CONTROLLER_TITLE ")";
+#elif defined(SIMULATOR_DEVICE_X3)
+#if defined(SIMULATOR_DISPLAY_UC8279)
+static constexpr const char *WINDOW_TITLE = "Simulator - XTEINK X3 (UC8279d)";
+#else
+static constexpr const char *WINDOW_TITLE = "Simulator - XTEINK X3 (UC8253)";
+#endif
+#else
+static constexpr const char *WINDOW_TITLE =
+    "Simulator - XTEINK X4 (" SIMULATOR_CONTROLLER_TITLE ")";
+#endif
+
+#undef SIMULATOR_CONTROLLER_TITLE
 
 void HalDisplay::begin() {
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -361,6 +392,9 @@ bool HalDisplay::isInverted() const { return inverted; }
 
 void HalDisplay::displayBuffer(RefreshMode mode, bool turnOffScreen) {
   refreshDisplay(mode, turnOffScreen);
+  if (std::this_thread::get_id() == simulatorMainThread) {
+    presentIfNeeded();
+  }
 }
 
 void HalDisplay::displayBufferAsync(RefreshMode mode) {
@@ -388,9 +422,8 @@ void HalDisplay::refreshDisplay(RefreshMode /*mode*/, bool /*turnOffScreen*/) {
 // Called from the main thread (simulator_main.cpp) to push pixels to SDL.
 void HalDisplay::presentIfNeeded() {
   const bool screenshotDue = hasDueScreenshot();
-  if (!pendingPresent.load() && !screenshotDue)
+  if (!pendingPresent.exchange(false) && !screenshotDue)
     return;
-  pendingPresent.store(false);
 
   if (!texture || !sdl_renderer)
     return;
@@ -399,8 +432,11 @@ void HalDisplay::presentIfNeeded() {
   const GfxRenderer::Orientation orientation = renderer.getOrientation();
   applyWindowGeometryIfNeeded(orientation);
 
-  SDL_UpdateTexture(texture, nullptr, pixelBuf,
-                    DISPLAY_WIDTH * sizeof(uint32_t));
+  {
+    const std::lock_guard<std::mutex> lock(pixelBufMutex);
+    SDL_UpdateTexture(texture, nullptr, pixelBuf,
+                      DISPLAY_WIDTH * sizeof(uint32_t));
+  }
   SDL_RenderClear(sdl_renderer);
 
   // For portrait modes the landscape panel texture must be rotated to fill the
@@ -485,6 +521,10 @@ void HalDisplay::copyGrayscaleBuffers(const uint8_t *lsbBuffer,
 }
 void HalDisplay::displayGrayscaleBase(RefreshMode fallback,
                                       bool turnOffScreen) {
+  if (combinesGrayscaleBase()) {
+    snapshotBwBase(getFrameBuffer());
+    return;
+  }
   displayBuffer(fallback, turnOffScreen);
 }
 void HalDisplay::preconditionGrayscale() {}
@@ -532,6 +572,9 @@ void HalDisplay::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t *rows,
   }
 }
 bool HalDisplay::supportsStripGrayscale() const { return true; }
+bool HalDisplay::combinesGrayscaleBase() const {
+  return BoardConfig::isPaperMono();
+}
 
 uint16_t HalDisplay::getDisplayWidth() const { return DISPLAY_WIDTH; }
 uint16_t HalDisplay::getDisplayHeight() const { return DISPLAY_HEIGHT; }
