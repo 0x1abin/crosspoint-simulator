@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <BatteryMonitor.h>
+#include <BoardConfig.h>
 #include <InputManager.h>
 
 // Display SPI pins (custom pins for XteinkX4, not hardware SPI defaults)
@@ -65,6 +66,7 @@ public:
   bool wasAnyPressed() const;
   bool wasReleased(uint8_t buttonIndex) const;
   bool wasAnyReleased() const;
+  bool isDebouncePending() const { return false; }
   unsigned long getHeldTime() const;
   unsigned long getPowerButtonHeldTime() const;
   bool hasTouch() const;
@@ -77,11 +79,14 @@ public:
   bool wasTouchReleased() const;
   bool isTouchTapCandidate(float &nx, float &ny, unsigned long &heldMs) const;
   bool isTouchHeldAt(float &nx, float &ny) const;
+  bool wasTouchLongPress(float &nx, float &ny) const;
+  void suppressTouchContact();
   unsigned long lastTouchHeldMs() const;
   bool wasSwipe(float &nxStart, float &nyStart, float &nxEnd,
                 float &nyEnd) const;
   bool wasTouchActivity() const;
   void setSharedConfirmPowerShortPressEmitsPower(bool enabled);
+  bool restoreTouchAfterDisplayReset();
   bool consumeSimulatorSleepRequest();
 
   // Setup wake up GPIO and enter deep sleep
@@ -89,6 +94,7 @@ public:
 
   // Verify power button was held long enough after wakeup.
   // The host wake path is synthetic, so verification always succeeds.
+  bool verifyPowerButtonWakeup();
   bool verifyPowerButtonWakeup(uint16_t requiredDurationMs,
                                bool shortPressAllowed);
 
@@ -97,6 +103,7 @@ public:
 
   // Returns true once per edge (plug or unplug) since the last update()
   bool wasUsbStateChanged() const;
+  void pollUsbState() {}
 
   enum class WakeupReason { PowerButton, AfterFlash, AfterUSBPower, Other };
 

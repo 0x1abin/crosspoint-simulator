@@ -47,6 +47,15 @@ void testDeviceProfile() {
   assert(BoardConfig::hasTouch());
   assert(BoardConfig::hasHomeKey());
   assert(!BoardConfig::hasPwmFrontlight());
+#elif defined(SIMULATOR_DEVICE_MURPHY_M4)
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 800);
+  static_assert(EInkDisplay::DISPLAY_HEIGHT == 480);
+  static_assert(EInkDisplay::DISPLAY_WIDTH * EInkDisplay::DISPLAY_HEIGHT / 8 ==
+                48000);
+  assert(std::strcmp(BoardConfig::ACTIVE.name, "murphy_m4") == 0);
+  assert(BoardConfig::hasTouch());
+  assert(!BoardConfig::hasHomeKey());
+  assert(BoardConfig::hasPwmFrontlight());
 #elif defined(SIMULATOR_DEVICE_MOFEI_M4)
   static_assert(EInkDisplay::DISPLAY_WIDTH == 800);
   static_assert(EInkDisplay::DISPLAY_HEIGHT == 480);
@@ -145,7 +154,8 @@ int main() {
   HalClock clock;
   clock.begin();
 #if defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO) ||        \
-    defined(SIMULATOR_DEVICE_EEGO_A4) || defined(SIMULATOR_DEVICE_MOFEI_M4)
+    defined(SIMULATOR_DEVICE_EEGO_A4) ||                                    \
+    defined(SIMULATOR_DEVICE_MURPHY_M4) || defined(SIMULATOR_DEVICE_MOFEI_M4)
   assert(clock.isAvailable());
 #else
   assert(!clock.isAvailable());

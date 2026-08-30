@@ -14,7 +14,7 @@ void HalFrontlight::begin(uint8_t brightness, uint8_t warmth, bool on) {
   if (!present())
     return;
   lastBrightness = std::min<uint8_t>(brightness, 100);
-  lastWarmth = std::min<uint8_t>(warmth, 100);
+  lastWarmth = hasColorTemperature() ? std::min<uint8_t>(warmth, 100) : 0;
   lit = on;
   std::cerr << "[SIM] " << BoardConfig::ACTIVE.name
             << " frontlight: " << (lit ? "on" : "off")
@@ -34,7 +34,8 @@ void HalFrontlight::setBrightness(uint8_t percent) {
 }
 
 void HalFrontlight::setWarmth(uint8_t warmPercent) {
-  lastWarmth = std::min<uint8_t>(warmPercent, 100);
+  if (hasColorTemperature())
+    lastWarmth = std::min<uint8_t>(warmPercent, 100);
 }
 
 void HalFrontlight::setOn(bool on) { lit = present() && on; }

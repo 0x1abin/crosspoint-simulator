@@ -1,6 +1,6 @@
 # CrossPoint Simulator
 
-A desktop simulator for [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader)-based firmware. Compiles the firmware natively and renders the e-ink display in an SDL2 window. No device required. Can be used with forks of Crosspoint but any new methods added to the firmware will need to be stubbed.
+A desktop simulator for [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader)-based firmware. Compiles the firmware natively and renders the e-ink display in an SDL2 window. No device required. Can be used with forks of Crosspoint but any new methods added to the firmware will need to be stubbed. If your fork diverges from the CrossPoint HAL, see [FORKING.md](FORKING.md).
 
 > [!NOTE]
 > **Platform support:** macOS and Linux/WSL use different native compiler and library flags. Start from `sample-platformio-macos.ini` on macOS, or `sample-platformio-linux-wsl.ini` on Linux/WSL. Native Windows is not supported; use WSL and follow the Linux instructions.
@@ -48,8 +48,9 @@ WebDAV routes instead of a reduced simulator-only substitute.
 If the consuming firmware's `OtaUpdater::checkForUpdate` accepts a `Channel`,
 define `CROSSPOINT_SIMULATOR_OTA_CHANNELS=1` in the simulator environment.
 
-The simulator defaults to the X4 panel shape. Device-specific environments can
-extend the base simulator environment with one of these flags:
+The simulator defaults to the original X4 panel shape and SSD1677 controller.
+Device-specific environments can extend the base simulator environment with
+these flags:
 
 - `-DSIMULATOR_DEVICE_X3` switches the framebuffer to 792x528 landscape,
   selects the X3 board profile, and exposes the simulator tilt sensor.
@@ -58,12 +59,35 @@ extend the base simulator environment with one of these flags:
   capacitive Home key, the RTC, display inversion, and frontlight state.
 - `-DSIMULATOR_DEVICE_EEGO_A4` selects the 768x552 eego A4 profile with touch,
   the capacitive Home/Back key, RTC, and its symmetric viewable margin.
-- `-DSIMULATOR_DEVICE_MOFEI_M4` selects the 800x480 Mofei M4 profile with
+- `-DSIMULATOR_DEVICE_MURPHY_M4` selects the 800x480 Murphy M4 profile with
   touch, RTC, and warm/cool frontlight state.
+- `-DSIMULATOR_DEVICE_MOFEI_M4` is retained as a compatibility alias for
+  existing fork consumers.
+- `-DSIMULATOR_DEVICE_STICKY` selects the Seeed Sticky's 800x480 SSD1677
+  profile. It exposes touch and swipe input, the RTC, and the tilt sensor
+  without exposing the X4 Pro-only Home key or frontlight.
+- `-DSIMULATOR_DEVICE_PAPERMONO` selects the M5Stack PaperMono's 800x480
+  SSD1677 profile. It exposes FT6336-compatible touch and swipe input, the RTC,
+  and single-channel frontlight state without a Home key or color-temperature
+  control.
+- `-DSIMULATOR_DISPLAY_UC8179` selects the newer UC8179 controller used by
+  some X4 and X4 Pro production batches.
+- `-DSIMULATOR_DISPLAY_UC8279` selects UC8279d on X3, or the 800x480 UC8279
+  controller on X4-family profiles.
 
-The sample PlatformIO files include ready-to-use `simulator_x3` and
-`simulator_x4_pro`, `simulator_eego_a4`, and `simulator_mofei_m4`
-environments.
+The sample PlatformIO files include ready-to-use environments for the original
+profiles plus `simulator_eego_a4`, `simulator_murphy_m4`,
+`simulator_mofei_m4`, `simulator_sticky`, `simulator_papermono`,
+`simulator_x3_uc8279`, `simulator_x4_uc8179`, `simulator_x4_uc8279`,
+`simulator_x4_pro_uc8179`, and `simulator_x4_pro_uc8279`. The UC8279 X4 Pro
+path mirrors current FreeInk SDK support but remains pending validation on
+physical UC8279 X4 Pro hardware.
+
+Controller profiles expose the same framebuffer geometry and device
+capabilities as their original production run. The simulator records the
+selected `BoardConfig::DisplayController` and identifies it in the window title;
+it does not attempt to model controller timing, LUT waveforms, ghosting, or
+power sequencing.
 
 By default, the simulator keeps its own `JPEGDEC`, `PNGdec`, and QRCode compatibility shims so existing firmware projects can update this library without changing their simulator environment. To test against the native decoder libraries instead, follow the opt-in comments in the sample PlatformIO files: define `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, set `lib_compat_mode = off`, change simulator `lib_ignore` to `hal, WebSockets`, and add the native `PNGdec`/`JPEGDEC` dependencies. `WebSockets` is ignored only in native simulator builds because this repo supplies the host-backed `WebSocketsServer` implementation.
 
@@ -165,6 +189,12 @@ tests possible without desktop-control permissions:
 - `CROSSPOINT_SIM_SCREENSHOTS` saves BMP screenshots as
   `<milliseconds>:<path>`, separated by semicolons. Create the destination
   directory before running the simulator.
+- `CROSSPOINT_SIM_FREE_HEAP` and `CROSSPOINT_SIM_MAX_ALLOC_HEAP` override the
+  ESP heap metrics reported to firmware. They are useful for repeatable
+  low-memory paths without exhausting the host process. Values are byte counts;
+  invalid or out-of-range values use the 1 MiB default. The free-heap override
+  also controls the reported minimum free heap, and maximum allocation is
+  bounded by free heap.
 - A sleep/wake test starts a fresh simulator process, matching the existing
   deep-sleep model. Set `CROSSPOINT_SIM_INPUT_SCRIPT_AFTER_WAKE` and
   `CROSSPOINT_SIM_SCREENSHOTS_AFTER_WAKE` for that second process. The
@@ -186,6 +216,14 @@ An X4 Pro touch and Home-key smoke test can use:
 CROSSPOINT_SIM_INPUT_SCRIPT='2000:TAP:240,530;3000:HOME:100;3900:QUIT' \
 CROSSPOINT_SIM_SCREENSHOTS='2500:./qa-artifacts/x4-pro-settings.bmp;3500:./qa-artifacts/x4-pro-home.bmp' \
   .pio/build/simulator_x4_pro/program
+```
+
+For Sticky, the same touch path is available without the Home key:
+
+```bash
+CROSSPOINT_SIM_INPUT_SCRIPT='2000:TAP:240,530;3600:QUIT' \
+CROSSPOINT_SIM_SCREENSHOTS='1500:./qa-artifacts/sticky-home.bmp;3000:./qa-artifacts/sticky-settings.bmp' \
+  .pio/build/simulator_sticky/program
 ```
 
 A deterministic sleep/wake smoke test can use:
@@ -266,4 +304,4 @@ quality, refresh behaviour, or memory pressure.
 **Cache**: On first open of an ebook, an "Indexing..." popup will appear while the section cache is built. If you see rendering issues after a code change that affects layout, delete `./fs_/.crosspoint/` to clear stale caches.
 
 > [!WARNING]
-> **Upstream compatibility:** The simulator mirrors interfaces used by Crosspoint. If Crosspoint adds or changes methods in a shared library and the simulator build reaches that code path, the simulator can fail to compile or link until a matching implementation or stub is added here. In many cases this is just a small no-op shim. Open a PR if the change is broadly applicable to CrossPoint-based forks.
+> **Upstream compatibility:** The simulator mirrors interfaces used by Crosspoint. If Crosspoint adds or changes methods in a shared library and the simulator build reaches that code path, the simulator can fail to compile or link until a matching implementation or stub is added here. In many cases this is just a small no-op shim. Open a PR if the change tracks upstream CrossPoint, fills a gap in the emulated Arduino/ESP-IDF layer, or fixes the simulator itself. If the change only matches your own fork's HAL, maintain it in a fork of this repo instead. See [FORKING.md](FORKING.md).
