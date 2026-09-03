@@ -11,6 +11,7 @@
 #define FREEINK_LOG_TRANSPORT FREEINK_LOG_TRANSPORT_HWCDC
 
 #if (defined(SIMULATOR_DEVICE_X3) + defined(SIMULATOR_DEVICE_X4_PRO) +        \
+     defined(SIMULATOR_DEVICE_X4_CLASSIC) +                                 \
      defined(SIMULATOR_DEVICE_STICKY) +                                     \
      defined(SIMULATOR_DEVICE_PAPERMONO) +                                  \
      defined(SIMULATOR_DEVICE_EEGO_A4) +                                    \
@@ -39,6 +40,7 @@
 #undef FREEINK_DEVICE_X4
 #undef FREEINK_DEVICE_X3
 #undef FREEINK_DEVICE_X4PRO
+#undef FREEINK_DEVICE_X4CLASSIC
 #undef FREEINK_DEVICE_STICKY
 #undef FREEINK_DEVICE_PAPERMONO
 #undef FREEINK_DEVICE_EEGO_A4
@@ -49,6 +51,7 @@
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
 #define FREEINK_DEVICE_STICKY 0
 #define FREEINK_DEVICE_PAPERMONO 1
 #define FREEINK_DEVICE_EEGO_A4 0
@@ -60,6 +63,7 @@
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
 #define FREEINK_DEVICE_STICKY 1
 #define FREEINK_DEVICE_PAPERMONO 0
 #define FREEINK_DEVICE_EEGO_A4 0
@@ -71,6 +75,7 @@
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
 #define FREEINK_DEVICE_STICKY 0
 #define FREEINK_DEVICE_PAPERMONO 0
 #define FREEINK_DEVICE_EEGO_A4 1
@@ -83,6 +88,7 @@
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
 #define FREEINK_DEVICE_STICKY 0
 #define FREEINK_DEVICE_PAPERMONO 0
 #define FREEINK_DEVICE_EEGO_A4 0
@@ -94,6 +100,7 @@
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 1
+#define FREEINK_DEVICE_X4CLASSIC 0
 #define FREEINK_DEVICE_STICKY 0
 #define FREEINK_DEVICE_PAPERMONO 0
 #define FREEINK_DEVICE_EEGO_A4 0
@@ -101,10 +108,23 @@
 #define FREEINK_DEVICE_MOFEI_M4 0
 #define FREEINK_CAP_TOUCH 1
 #define FREEINK_CAP_FRONTLIGHT 1
+#elif defined(SIMULATOR_DEVICE_X4_CLASSIC)
+#define FREEINK_DEVICE_X4 0
+#define FREEINK_DEVICE_X3 0
+#define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 1
+#define FREEINK_DEVICE_STICKY 0
+#define FREEINK_DEVICE_PAPERMONO 0
+#define FREEINK_DEVICE_EEGO_A4 0
+#define FREEINK_DEVICE_MURPHY_M4 0
+#define FREEINK_DEVICE_MOFEI_M4 0
+#define FREEINK_CAP_TOUCH 0
+#define FREEINK_CAP_FRONTLIGHT 0
 #elif defined(SIMULATOR_DEVICE_X3)
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 1
 #define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
 #define FREEINK_DEVICE_STICKY 0
 #define FREEINK_DEVICE_PAPERMONO 0
 #define FREEINK_DEVICE_EEGO_A4 0
@@ -116,6 +136,7 @@
 #define FREEINK_DEVICE_X4 1
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
 #define FREEINK_DEVICE_STICKY 0
 #define FREEINK_DEVICE_PAPERMONO 0
 #define FREEINK_DEVICE_EEGO_A4 0
@@ -134,6 +155,7 @@ enum class Board {
   XteinkX3,
   XteinkX3Uc8279,
   XteinkX4Pro,
+  XteinkX4Classic,
   EegoA4,
   MurphyM4,
   MofeiM4,
@@ -196,6 +218,9 @@ inline constexpr BoardProfile XTEINK_X3_UC8279 = {
 inline constexpr BoardProfile XTEINK_X4_PRO = {
     Board::XteinkX4Pro, "xteink_x4_pro", X4_DISPLAY_CONTROLLER,
     X4_DISPLAY_CONTROLLER_VARIANT, {0, 7}};
+inline constexpr BoardProfile XTEINK_X4_CLASSIC = {
+    Board::XteinkX4Classic, "xteink_x4_classic", X4_DISPLAY_CONTROLLER,
+    X4_DISPLAY_CONTROLLER_VARIANT, {0, 7}, {9, 7, 3, 7}};
 inline constexpr BoardProfile EEGO_A4 = {
     Board::EegoA4, "eego_a4", DisplayController::UC8279C, 0, {7, 8}};
 inline constexpr BoardProfile MURPHY_M4 = {
@@ -220,6 +245,8 @@ inline BoardProfile ACTIVE = MURPHY_M4;
 inline BoardProfile ACTIVE = MOFEI_M4;
 #elif defined(SIMULATOR_DEVICE_X4_PRO)
 inline BoardProfile ACTIVE = XTEINK_X4_PRO;
+#elif defined(SIMULATOR_DEVICE_X4_CLASSIC)
+inline BoardProfile ACTIVE = XTEINK_X4_CLASSIC;
 #elif defined(SIMULATOR_DEVICE_X3)
 #if defined(SIMULATOR_DISPLAY_UC8279)
 inline BoardProfile ACTIVE = XTEINK_X3_UC8279;
@@ -244,6 +271,9 @@ inline bool selectDevice(Board board) {
   case Board::XteinkX4Pro:
     ACTIVE = XTEINK_X4_PRO;
     return true;
+  case Board::XteinkX4Classic:
+    ACTIVE = XTEINK_X4_CLASSIC;
+    return true;
   case Board::EegoA4:
     ACTIVE = EEGO_A4;
     return true;
@@ -264,6 +294,7 @@ inline bool selectDevice(Board board) {
 }
 
 inline bool isX4Pro() { return ACTIVE.board == Board::XteinkX4Pro; }
+inline bool isX4Classic() { return ACTIVE.board == Board::XteinkX4Classic; }
 inline bool isEegoA4() { return ACTIVE.board == Board::EegoA4; }
 inline bool isMurphyM4() {
   return ACTIVE.board == Board::MurphyM4 ||
