@@ -218,6 +218,12 @@ bool HalFile::seekSet(size_t offset) {
   if (impl->fd < 0) return false;
   return lseek(impl->fd, (off_t)offset, SEEK_SET) >= 0;
 }
+bool HalFile::truncate(uint64_t length) {
+  if (!impl || impl->fd < 0 ||
+      length > static_cast<uint64_t>(std::numeric_limits<off_t>::max()))
+    return false;
+  return ftruncate(impl->fd, static_cast<off_t>(length)) == 0;
+}
 int HalFile::available() const {
   if (!impl || impl->fd < 0)
     return 0;
