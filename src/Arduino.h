@@ -10,6 +10,8 @@
 #include <string>
 #include <thread>
 
+#include "freertos/FreeRTOS.h"
+
 #define PROGMEM
 #define ICACHE_RODATA_ATTR
 #define IRAM_ATTR
@@ -35,6 +37,7 @@ inline void delay(unsigned long ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 inline void yield() { std::this_thread::yield(); }
+inline void configTzTime(const char *, const char *) {}
 
 // Native builds have no GPIO pins. Treat every input as released, matching the
 // idle pull-up state used by the button diagnostics in firmware startup.

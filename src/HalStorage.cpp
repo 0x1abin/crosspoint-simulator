@@ -388,6 +388,9 @@ bool HalStorage::rename(const char *oldPath, const char *newPath) {
   ensureParentDirectories(n);
   return ::rename(o.c_str(), n.c_str()) == 0;
 }
+bool HalStorage::replaceFile(const char *tmpPath, const char *path) {
+  return rename(tmpPath, path);
+}
 static bool removeDirRecursive(const std::string &full) {
   DIR *d = opendir(full.c_str());
   if (!d)
@@ -457,6 +460,23 @@ size_t HalStorage::readFileToBuffer(const char *path, char *buffer,
     n = 0;
   buffer[n] = '\0';
   return n;
+}
+bool HalStorage::readFileToString(const char *moduleName,
+                                  const std::string &path, size_t cap,
+                                  std::string &out) {
+  out.clear();
+  HalFile file;
+  if (!openFileForRead(moduleName, path, file) || file.isDirectory())
+    return false;
+  const size_t size = file.fileSize();
+  if (size == 0 || size > cap)
+    return false;
+  out.resize(size);
+  if (file.read(out.data(), size) != static_cast<int>(size)) {
+    out.clear();
+    return false;
+  }
+  return true;
 }
 bool HalStorage::writeFile(const char *path, const String &content) {
   HalFile f = open(path, O_WRONLY | O_CREAT | O_TRUNC);
