@@ -20,6 +20,7 @@
 #define IRAM_ATTR
 #define DRAM_ATTR
 #define RTC_NOINIT_ATTR
+#define SET_LOOP_TASK_STACK_SIZE(bytes)
 #define PGM_P const char *
 #define PSTR(s) (s)
 
@@ -67,12 +68,24 @@ struct ESPMock {
   }
 
   uint32_t getFreeHeap() { return heapValue("CROSSPOINT_SIM_FREE_HEAP"); }
+  uint32_t getPsramSize() const {
+#ifdef BOARD_HAS_PSRAM
+    return 8U * 1024U * 1024U;
+#else
+    return 0;
+#endif
+  }
+  uint32_t getFreePsram() const { return getPsramSize(); }
+  uint32_t getMaxAllocPsram() const { return getPsramSize(); }
   void restart() {}
   uint32_t getHeapSize() { return HEAP_SIZE; }
   uint32_t getMinFreeHeap() { return getFreeHeap(); }
   uint32_t getMaxAllocHeap() {
     return std::min(heapValue("CROSSPOINT_SIM_MAX_ALLOC_HEAP"), getFreeHeap());
   }
+  const char *getChipModel() const { return "simulator"; }
+  uint32_t getChipRevision() const { return 0; }
+  uint32_t getFlashChipSize() const { return 16U * 1024U * 1024U; }
 };
 extern ESPMock ESP;
 

@@ -69,6 +69,7 @@ public:
   bool isDebouncePending() const { return false; }
   unsigned long getHeldTime() const;
   unsigned long getPowerButtonHeldTime() const;
+  bool rawInputActive();
   bool hasTouch() const;
   bool hasHomeKey() const;
   bool wasHomeKeyPressed() const;
