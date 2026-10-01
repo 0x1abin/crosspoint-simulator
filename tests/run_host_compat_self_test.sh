@@ -24,7 +24,7 @@ if [[ "$(uname -s)" == "Linux" ]]; then
 fi
 for device in DEFAULT SIMULATOR_DEVICE_X3 SIMULATOR_DEVICE_X4_PRO \
   SIMULATOR_DEVICE_EEGO_A4 SIMULATOR_DEVICE_MURPHY_M4 \
-  SIMULATOR_DEVICE_MOFEI_M4; do
+  SIMULATOR_DEVICE_MOFEI_M4 SIMULATOR_DEVICE_STICKY; do
   device_compile=("${CXX:-c++}" "${compile[@]}")
   if [[ "$device" != DEFAULT ]]; then
     device_compile+=("-D$device")
@@ -33,4 +33,5 @@ for device in DEFAULT SIMULATOR_DEVICE_X3 SIMULATOR_DEVICE_X4_PRO \
   "${device_compile[@]}"
   "$test_binary"
 done
+python3 "$repo_root/tests/test_button_release.py"
 printf 'host compatibility self-test passed\n'

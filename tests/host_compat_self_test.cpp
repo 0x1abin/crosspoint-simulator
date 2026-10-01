@@ -15,6 +15,7 @@
 
 #include <array>
 #include <cassert>
+#include <esp_heap_caps.h>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -74,6 +75,13 @@ void testDeviceProfile() {
   assert(BoardConfig::hasTouch());
   assert(BoardConfig::hasHomeKey());
   assert(BoardConfig::hasPwmFrontlight());
+#elif defined(SIMULATOR_DEVICE_STICKY)
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 800);
+  static_assert(EInkDisplay::DISPLAY_HEIGHT == 480);
+  assert(std::strcmp(BoardConfig::ACTIVE.name, "sticky") == 0);
+  assert(BoardConfig::hasTouch());
+  assert(!BoardConfig::hasHomeKey());
+  assert(!BoardConfig::hasPwmFrontlight());
 #elif defined(SIMULATOR_DEVICE_X3)
   static_assert(EInkDisplay::DISPLAY_WIDTH == 792);
   static_assert(EInkDisplay::DISPLAY_HEIGHT == 528);
@@ -130,6 +138,9 @@ void testSystemInfo() {
 } // namespace
 
 int main() {
+  assert(ESP.getFreePsram() == heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+  assert(ESP.getMaxAllocPsram() == heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+
   testDeviceProfile();
   testSystemInfo();
   std::array<uint8_t, 32> randomBytes{};
@@ -155,7 +166,7 @@ int main() {
   clock.begin();
 #if defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO) ||        \
     defined(SIMULATOR_DEVICE_EEGO_A4) ||                                    \
-    defined(SIMULATOR_DEVICE_MURPHY_M4) || defined(SIMULATOR_DEVICE_MOFEI_M4)
+    defined(SIMULATOR_DEVICE_MURPHY_M4) || defined(SIMULATOR_DEVICE_MOFEI_M4) || defined(SIMULATOR_DEVICE_STICKY)
   assert(clock.isAvailable());
 #else
   assert(!clock.isAvailable());
@@ -169,6 +180,16 @@ int main() {
   const std::time_t manualTime = std::time(nullptr) + 3600;
   assert(clock.setUtcTime(manualTime));
   assert(std::llabs(static_cast<long long>(clock.nowUtc() - manualTime)) <= 1);
+  if (clock.isAvailable()) {
+    clock.setTimezone("UTC-8");
+    std::tm local{};
+    assert(clock.localTime(local));
+    char formatted[16];
+    assert(clock.formatTime(formatted, sizeof(formatted), false));
+    assert(clock.formatTime(formatted, sizeof(formatted), uint8_t{48}, false));
+    assert(!clock.formatTime(formatted, 2, false));
+    clock.setTimezone("UTC0");
+  }
   assert(clock.requestSync());
   assert(clock.syncState() == ClockSyncState::Succeeded);
   assert(std::llabs(static_cast<long long>(clock.nowUtc() - std::time(nullptr))) <= 1);

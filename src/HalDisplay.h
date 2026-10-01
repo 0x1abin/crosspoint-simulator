@@ -1,9 +1,36 @@
 #pragma once
 #include <Arduino.h>
+#include <BoardConfig.h>
 #include <EInkDisplay.h>
 
 class HalDisplay {
 public:
+  using Controller = BoardConfig::DisplayController;
+
+  enum class GrayscaleMode : uint8_t { Overlay, Absolute, Direct };
+  enum class GrayscaleEncoding : uint8_t {
+    Unsupported,
+    OverlayMasks,
+    AbsolutePlanes,
+  };
+  enum class GrayscaleBase : uint8_t { Separate, Combined };
+
+  struct GrayscaleCapabilities {
+    GrayscaleEncoding encoding = GrayscaleEncoding::Unsupported;
+    GrayscaleBase base = GrayscaleBase::Separate;
+    bool stripUploads = false;
+    bool asyncBase = false;
+    bool stagingWhileBusy = false;
+
+    constexpr bool supported() const {
+      return encoding != GrayscaleEncoding::Unsupported;
+    }
+  };
+
+  Controller getController() const;
+  GrayscaleCapabilities grayscaleCapabilities(
+      GrayscaleMode mode = GrayscaleMode::Overlay) const;
+
   // Constructor with pin configuration
   HalDisplay();
 
@@ -66,6 +93,9 @@ public:
 
   void displayGrayscaleBase(RefreshMode fallback = HALF_REFRESH,
                             bool turnOffScreen = false);
+  bool displayGrayscaleBase(GrayscaleMode mode,
+                            RefreshMode fallback = HALF_REFRESH,
+                            bool turnOffScreen = false);
   void preconditionGrayscale();
   void preconditionGrayscale(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
@@ -85,6 +115,7 @@ public:
   void writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t *rows,
                                 uint16_t yStart, uint16_t numRows);
   bool supportsStripGrayscale() const;
+  bool supportsAsyncGrayscaleBase() const;
   bool combinesGrayscaleBase() const;
 
   // Simulator only: call from main thread to push rendered pixels to SDL.

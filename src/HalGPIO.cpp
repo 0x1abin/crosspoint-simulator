@@ -609,6 +609,13 @@ bool HalGPIO::isPressed(uint8_t buttonIndex) const {
   return state[buttonScancode[buttonIndex]] || syntheticButtonDown[buttonIndex];
 }
 
+bool HalGPIO::rawInputActive() {
+  for (uint8_t button = 0; button < NUM_BUTTONS; ++button) {
+    if (isPressed(button)) return true;
+  }
+  return touchState.down || homeKeyDown;
+}
+
 bool HalGPIO::wasPressed(uint8_t buttonIndex) const {
   if (buttonIndex >= NUM_BUTTONS)
     return false;
@@ -638,12 +645,12 @@ bool HalGPIO::wasAnyReleased() const {
 }
 
 unsigned long HalGPIO::getHeldTime() const {
-  // Return the longest held time among all currently pressed buttons
+  // Keep the duration on the release frame too, matching the hardware HAL.
   unsigned long now = SDL_GetTicks();
   unsigned long maxHeld = 0;
   const uint8_t *state = SDL_GetKeyboardState(NULL);
   for (int i = 0; i < NUM_BUTTONS; i++) {
-    if ((state[buttonScancode[i]] || syntheticButtonDown[i]) &&
+    if ((state[buttonScancode[i]] || syntheticButtonDown[i] || releasedThisFrame[i]) &&
         buttonPressTime[i] > 0) {
       unsigned long held = now - buttonPressTime[i];
       if (held > maxHeld)
