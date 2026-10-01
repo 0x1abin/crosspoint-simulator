@@ -60,6 +60,12 @@ these flags:
 - `-DSIMULATOR_DEVICE_X4_CLASSIC` selects the X4 Classic's 800x480
   buttons-only profile. It exposes the RTC, tilt sensor, side page-turn
   buttons, and four front buttons without touch, a Home key, or frontlight.
+- `-DSIMULATOR_DEVICE_READPICO` selects Read Pico's 1216x684 scan frame,
+  684x1216 portrait UI, touch, RTC and native sixteen-level image output. It has
+  no Home key, edge buttons or frontlight. Up/Escape/Down stand in for the three
+  capacitive keys; only Power wakes from sleep. Its window fits the usable desktop
+  without upscaling, while BMP screenshots retain native oriented pixels and the
+  profile carries the current `{9,3,24,3}` portrait insets.
 - `-DSIMULATOR_DEVICE_EEGO_A4` selects the 768x552 eego A4 profile with touch,
   the capacitive Home/Back key, RTC, and its symmetric viewable margin.
 - `-DSIMULATOR_DEVICE_MURPHY_M4` selects the 800x480 Murphy M4 profile with
@@ -309,3 +315,16 @@ quality, refresh behaviour, or memory pressure.
 
 > [!WARNING]
 > **Upstream compatibility:** The simulator mirrors interfaces used by Crosspoint. If Crosspoint adds or changes methods in a shared library and the simulator build reaches that code path, the simulator can fail to compile or link until a matching implementation or stub is added here. In many cases this is just a small no-op shim. Open a PR if the change tracks upstream CrossPoint, fills a gap in the emulated Arduino/ESP-IDF layer, or fixes the simulator itself. If the change only matches your own fork's HAL, maintain it in a fork of this repo instead. See [FORKING.md](FORKING.md).
+
+## Read Pico host checks
+
+From a desktop session, run `bash tests/run_readpico_self_test.sh /path/to/crossmux`.
+Linux without a desktop can prefix the command with `xvfb-run -a`. This compiles
+the production display/input HAL against a small orientation seam and checks
+large B/W image copies, sixteen-level nibble order, transactions and cancellation,
+all four rotations, native-sized screenshots, scaled/1:1 mouse input, long-press
+release suppression, and power-only sleep/relaunch. It does not test waveforms,
+hardware memory budgets, raw digitizer calibration or physical peripherals.
+
+The existing `bash tests/run_host_compat_self_test.sh` also covers Read Pico's
+identity, capabilities, host RTC and storage.

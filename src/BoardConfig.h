@@ -10,13 +10,10 @@
 #define FREEINK_LOG_TRANSPORT_ROM_PRINTF 1
 #define FREEINK_LOG_TRANSPORT FREEINK_LOG_TRANSPORT_HWCDC
 
-#if (defined(SIMULATOR_DEVICE_X3) + defined(SIMULATOR_DEVICE_X4_PRO) +        \
-     defined(SIMULATOR_DEVICE_X4_CLASSIC) +                                 \
-     defined(SIMULATOR_DEVICE_STICKY) +                                     \
-     defined(SIMULATOR_DEVICE_PAPERMONO) +                                  \
-     defined(SIMULATOR_DEVICE_EEGO_A4) +                                    \
-     (defined(SIMULATOR_DEVICE_MURPHY_M4) ||                                \
-      defined(SIMULATOR_DEVICE_MOFEI_M4))) > 1
+#if (defined(SIMULATOR_DEVICE_READPICO) + defined(SIMULATOR_DEVICE_X3) + defined(SIMULATOR_DEVICE_X4_PRO) +          \
+     defined(SIMULATOR_DEVICE_X4_CLASSIC) + defined(SIMULATOR_DEVICE_STICKY) + defined(SIMULATOR_DEVICE_PAPERMONO) + \
+     defined(SIMULATOR_DEVICE_EEGO_A4) +                                                                             \
+     (defined(SIMULATOR_DEVICE_MURPHY_M4) || defined(SIMULATOR_DEVICE_MOFEI_M4))) > 1
 #error "Select at most one simulated device"
 #endif
 
@@ -28,15 +25,14 @@
 #error "Xteink X3 revisions use UC8253 or UC8279d, not UC8179"
 #endif
 
-#if (defined(SIMULATOR_DEVICE_STICKY) ||                                    \
-     defined(SIMULATOR_DEVICE_PAPERMONO) ||                                 \
-     defined(SIMULATOR_DEVICE_EEGO_A4) ||                                   \
-     defined(SIMULATOR_DEVICE_MURPHY_M4) ||                                 \
-     defined(SIMULATOR_DEVICE_MOFEI_M4)) &&                                 \
+#if (defined(SIMULATOR_DEVICE_READPICO) || defined(SIMULATOR_DEVICE_STICKY) || defined(SIMULATOR_DEVICE_PAPERMONO) || \
+     defined(SIMULATOR_DEVICE_EEGO_A4) || defined(SIMULATOR_DEVICE_MURPHY_M4) ||                                      \
+     defined(SIMULATOR_DEVICE_MOFEI_M4)) &&                                                                           \
     (defined(SIMULATOR_DISPLAY_UC8179) || defined(SIMULATOR_DISPLAY_UC8279))
 #error "This device has a fixed display controller"
 #endif
 
+#undef FREEINK_DEVICE_READPICO
 #undef FREEINK_DEVICE_X4
 #undef FREEINK_DEVICE_X3
 #undef FREEINK_DEVICE_X4PRO
@@ -47,7 +43,19 @@
 #undef FREEINK_DEVICE_MURPHY_M4
 #undef FREEINK_DEVICE_MOFEI_M4
 
-#if defined(SIMULATOR_DEVICE_PAPERMONO)
+#if defined(SIMULATOR_DEVICE_READPICO)
+#define FREEINK_DEVICE_X4 0
+#define FREEINK_DEVICE_X3 0
+#define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
+#define FREEINK_DEVICE_STICKY 0
+#define FREEINK_DEVICE_PAPERMONO 0
+#define FREEINK_DEVICE_EEGO_A4 0
+#define FREEINK_DEVICE_MURPHY_M4 0
+#define FREEINK_DEVICE_MOFEI_M4 0
+#define FREEINK_CAP_TOUCH 1
+#define FREEINK_CAP_FRONTLIGHT 0
+#elif defined(SIMULATOR_DEVICE_PAPERMONO)
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
@@ -146,6 +154,12 @@
 #define FREEINK_CAP_FRONTLIGHT 0
 #endif
 
+#if defined(SIMULATOR_DEVICE_READPICO)
+#define FREEINK_DEVICE_READPICO 1
+#else
+#define FREEINK_DEVICE_READPICO 0
+#endif
+
 #define FREEINK_MCU_C3 (FREEINK_DEVICE_X3 || FREEINK_DEVICE_X4)
 
 namespace BoardConfig {
@@ -161,6 +175,7 @@ enum class Board {
   MofeiM4,
   Sticky,
   PaperMono,
+  ReadPico,
 };
 
 enum class DisplayController {
@@ -174,7 +189,7 @@ enum class DisplayController {
   UC8279C = 8,
 };
 
-enum class TouchController : uint8_t { None, Chsc6x, Gt911, Ft5x06, Ft6336u, Gslx680 };
+enum class TouchController : uint8_t { None, Chsc6x, Gt911, Ft5x06, Ft6336u, Gslx680, Cst836u };
 
 struct TouchConfig {
   TouchController controller = TouchController::None;
@@ -200,6 +215,7 @@ struct BoardProfile {
   uint16_t displayWidth = 800;
   uint16_t displayHeight = 480;
   TouchConfig touch = {};
+  uint8_t grayscaleLevels = 4;
 };
 
 #if defined(SIMULATOR_DISPLAY_UC8179)
@@ -247,7 +263,12 @@ inline constexpr BoardProfile PAPER_MONO = {
     Board::PaperMono, "m5stack_paper_mono", DisplayController::SSD1677, 0,
     {0, 7}, {9, 7, 3, 7}, 800, 480, {TouchController::Ft6336u}};
 
-#if defined(SIMULATOR_DEVICE_PAPERMONO)
+inline constexpr BoardProfile READ_PICO = {Board::ReadPico, "read_pico", DisplayController::LgfxEpd, 0, {-1, -1},
+                                           {9, 3, 24, 3}, 1216, 684, {TouchController::Cst836u}, 16};
+
+#if defined(SIMULATOR_DEVICE_READPICO)
+inline BoardProfile ACTIVE = READ_PICO;
+#elif defined(SIMULATOR_DEVICE_PAPERMONO)
 inline BoardProfile ACTIVE = PAPER_MONO;
 #elif defined(SIMULATOR_DEVICE_STICKY)
 inline BoardProfile ACTIVE = STICKY;
@@ -300,6 +321,9 @@ inline bool selectDevice(Board board) {
   case Board::Sticky:
     ACTIVE = STICKY;
     return true;
+  case Board::ReadPico:
+    ACTIVE = READ_PICO;
+    return true;
   case Board::PaperMono:
     ACTIVE = PAPER_MONO;
     return true;
@@ -315,10 +339,10 @@ inline bool isMurphyM4() {
          ACTIVE.board == Board::MofeiM4;
 }
 inline bool isSticky() { return ACTIVE.board == Board::Sticky; }
+inline bool isReadPico() { return ACTIVE.board == Board::ReadPico; }
 inline bool isPaperMono() { return ACTIVE.board == Board::PaperMono; }
 inline bool hasTouch() {
-  return isX4Pro() || isEegoA4() || isMurphyM4() || isSticky() ||
-         isPaperMono();
+  return isX4Pro() || isEegoA4() || isMurphyM4() || isSticky() || isPaperMono() || isReadPico();
 }
 inline bool hasHomeKey() { return isX4Pro() || isEegoA4(); }
 inline bool hasPwmFrontlight() {
