@@ -264,7 +264,7 @@ inline constexpr BoardProfile PAPER_MONO = {
     {0, 7}, {9, 7, 3, 7}, 800, 480, {TouchController::Ft6336u}};
 
 inline constexpr BoardProfile READ_PICO = {Board::ReadPico, "read_pico", DisplayController::LgfxEpd, 0, {-1, -1},
-                                           {9, 3, 24, 3}, 1216, 684, {TouchController::Cst836u}, 16};
+                                           {5, 5, 8, 5}, 1216, 684, {TouchController::Cst836u}, 16};
 
 #if defined(SIMULATOR_DEVICE_READPICO)
 inline BoardProfile ACTIVE = READ_PICO;

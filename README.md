@@ -65,7 +65,7 @@ these flags:
   no Home key, edge buttons or frontlight. Up/Escape/Down stand in for the three
   capacitive keys; only Power wakes from sleep. Its window fits the usable desktop
   without upscaling, while BMP screenshots retain native oriented pixels and the
-  profile carries the current `{9,3,24,3}` portrait insets.
+  profile carries the current `{5,5,8,5}` portrait insets, matching the firmware SDK.
 - `-DSIMULATOR_DEVICE_EEGO_A4` selects the 768x552 eego A4 profile with touch,
   the capacitive Home/Back key, RTC, and its symmetric viewable margin.
 - `-DSIMULATOR_DEVICE_MURPHY_M4` selects the 800x480 Murphy M4 profile with
