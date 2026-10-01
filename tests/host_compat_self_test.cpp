@@ -39,7 +39,18 @@ esp_err_t captureHeader(esp_http_client_event_t *event) {
 }
 
 void testDeviceProfile() {
-#if defined(SIMULATOR_DEVICE_EEGO_A4)
+#if defined(SIMULATOR_DEVICE_READPICO)
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 1216);
+  static_assert(EInkDisplay::DISPLAY_HEIGHT == 684);
+  static_assert(EInkDisplay::DISPLAY_WIDTH * EInkDisplay::DISPLAY_HEIGHT / 8 == 103968);
+  assert(std::strcmp(BoardConfig::ACTIVE.name, "read_pico") == 0);
+  assert(BoardConfig::ACTIVE.grayscaleLevels == 16);
+  assert(BoardConfig::ACTIVE.touch.controller == BoardConfig::TouchController::Cst836u);
+  assert(BoardConfig::ACTIVE.viewableInsets.bottom == 24);
+  assert(BoardConfig::hasTouch());
+  assert(!BoardConfig::hasHomeKey());
+  assert(!BoardConfig::hasPwmFrontlight());
+#elif defined(SIMULATOR_DEVICE_EEGO_A4)
   static_assert(EInkDisplay::DISPLAY_WIDTH == 768);
   static_assert(EInkDisplay::DISPLAY_HEIGHT == 552);
   static_assert(EInkDisplay::DISPLAY_WIDTH * EInkDisplay::DISPLAY_HEIGHT / 8 ==
@@ -164,9 +175,9 @@ int main() {
 
   HalClock clock;
   clock.begin();
-#if defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO) ||        \
-    defined(SIMULATOR_DEVICE_EEGO_A4) ||                                    \
-    defined(SIMULATOR_DEVICE_MURPHY_M4) || defined(SIMULATOR_DEVICE_MOFEI_M4) || defined(SIMULATOR_DEVICE_STICKY)
+#if defined(SIMULATOR_DEVICE_READPICO) || defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO) || \
+    defined(SIMULATOR_DEVICE_EEGO_A4) || defined(SIMULATOR_DEVICE_MURPHY_M4) || \
+    defined(SIMULATOR_DEVICE_MOFEI_M4) || defined(SIMULATOR_DEVICE_STICKY)
   assert(clock.isAvailable());
 #else
   assert(!clock.isAvailable());

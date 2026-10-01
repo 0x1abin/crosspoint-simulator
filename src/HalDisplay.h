@@ -88,6 +88,10 @@ public:
   // Runtime geometry passthrough
   uint16_t getDisplayWidth() const;
   uint16_t getDisplayHeight() const;
+  uint8_t getGrayscaleLevels() const;
+  uint8_t* beginGrayscale16();
+  bool commitGrayscale16();
+  void cancelGrayscale16();
   uint16_t getDisplayWidthBytes() const;
   uint32_t getBufferSize() const;
 
@@ -108,10 +112,8 @@ public:
                          const unsigned char *lut = nullptr,
                          bool factoryMode = false);
 
-  // The simulator intentionally advertises strip grayscale support so host
-  // builds exercise the same low-memory path as the device firmware, and so
-  // streamed plane data can feed the same grayscale preview compositor as the
-  // legacy full-frame API.
+  // Legacy targets exercise the low-memory strip path. ReadPico uses the
+  // combined full-frame AA path, matching its hardware display contract.
   void writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t *rows,
                                 uint16_t yStart, uint16_t numRows);
   bool supportsStripGrayscale() const;

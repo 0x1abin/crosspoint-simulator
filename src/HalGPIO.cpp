@@ -307,8 +307,7 @@ int namedButton(const std::string &name) {
 
 bool canWakeFromButton(int button) {
   const auto board = BoardConfig::ACTIVE.board;
-  const bool powerOnly = board == BoardConfig::Board::EegoA4 ||
-                         BoardConfig::isMurphyM4();
+  const bool powerOnly = board == BoardConfig::Board::EegoA4 || BoardConfig::isMurphyM4() || BoardConfig::isReadPico();
   return !powerOnly || button == HalGPIO::BTN_POWER;
 }
 
@@ -460,7 +459,10 @@ static int scancodeToButton(SDL_Scancode sc) {
 }
 
 void HalGPIO::begin() {
-#if defined(SIMULATOR_DEVICE_EEGO_A4)
+#if defined(SIMULATOR_DEVICE_READPICO)
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::ReadPico);
+#elif defined(SIMULATOR_DEVICE_EEGO_A4)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::EegoA4);
 #elif defined(SIMULATOR_DEVICE_MURPHY_M4)

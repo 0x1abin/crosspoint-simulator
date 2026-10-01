@@ -2,8 +2,10 @@
 
 #include <BoardConfig.h>
 #include <GfxRenderer.h>
+#include <Memory.h>
 #include <SDL.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdlib>
@@ -17,10 +19,6 @@
 static SDL_Window *window = nullptr;
 static SDL_Renderer *sdl_renderer = nullptr;
 static SDL_Texture *texture = nullptr;
-// Render the simulator at full panel size. The previous 0.5x window was too
-// small. With 1:1 pixel mapping, the simulator can be used for testing fine
-// details.
-static constexpr int SIMULATOR_WINDOW_SCALE = 1;
 
 // Pixel buffer written by the render task, read by the main thread for
 // SDL_RenderPresent. On macOS, SDL calls must happen on the main thread.
@@ -34,6 +32,7 @@ std::atomic<bool> quitRequested{false};
 
 static int currentWindowWidth = 0;
 static int currentWindowHeight = 0;
+extern GfxRenderer renderer;
 
 namespace {
 
@@ -55,6 +54,12 @@ constexpr uint8_t kGrayBlack = 0;
 GrayscalePreviewState grayscalePreviewState;
 std::array<uint8_t, HalDisplay::BUFFER_SIZE> frameBufferStorage{};
 bool frameBufferLent = false;
+#if FREEINK_DEVICE_READPICO
+// Host-only fixed storage: 415,872 bytes, reused between image transactions.
+// It cannot live on a task stack and does not change any firmware allocation.
+std::array<uint8_t, HalDisplay::BUFFER_SIZE * 4> grayscale16Buffer{};
+bool grayscale16Active = false;
+#endif
 
 struct ScreenshotEvent {
   unsigned long atMs;
@@ -103,7 +108,56 @@ bool hasDueScreenshot() {
   return false;
 }
 
+bool saveNativeBmp(const std::string& path) {
+  const int width = renderer.getScreenWidth();
+  const int height = renderer.getScreenHeight();
+  // A full-size rotated screenshot needs separate storage; allocate only for
+  // capture, fallibly, and reuse the existing display buffer as the source.
+  auto pixels = makeUniqueNoThrow<uint32_t[]>(static_cast<size_t>(width) * height);
+  if (!pixels) {
+    std::cerr << "[SIM] OOM: native screenshot" << std::endl;
+    return false;
+  }
+  {
+    const std::lock_guard<std::mutex> lock(pixelBufMutex);
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        int px = x;
+        int py = y;
+        switch (renderer.getOrientation()) {
+          case GfxRenderer::Portrait:
+            px = y;
+            py = HalDisplay::DISPLAY_HEIGHT - 1 - x;
+            break;
+          case GfxRenderer::PortraitInverted:
+            px = HalDisplay::DISPLAY_WIDTH - 1 - y;
+            py = x;
+            break;
+          case GfxRenderer::LandscapeClockwise:
+            px = HalDisplay::DISPLAY_WIDTH - 1 - x;
+            py = HalDisplay::DISPLAY_HEIGHT - 1 - y;
+            break;
+          case GfxRenderer::LandscapeCounterClockwise:
+            break;
+        }
+        pixels[static_cast<size_t>(y) * width + x] = pixelBuf[static_cast<size_t>(py) * HalDisplay::DISPLAY_WIDTH + px];
+      }
+    }
+  }
+  SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(pixels.get(), width, height, 32, width * sizeof(uint32_t),
+                                                            SDL_PIXELFORMAT_ARGB8888);
+  if (!surface) {
+    std::cerr << "[SIM] Cannot create screenshot surface: " << SDL_GetError() << std::endl;
+    return false;
+  }
+  const bool saved = SDL_SaveBMP(surface, path.c_str()) == 0;
+  SDL_FreeSurface(surface);
+  std::cerr << "[SIM] " << (saved ? "Saved screenshot: " : "Failed screenshot: ") << path << std::endl;
+  return saved;
+}
+
 bool saveRendererBmp(const std::string &path) {
+  if (BoardConfig::isReadPico()) return saveNativeBmp(path);
   int width = 0;
   int height = 0;
   if (SDL_GetRendererOutputSize(sdl_renderer, &width, &height) != 0 ||
@@ -259,12 +313,8 @@ static bool isPortraitOrientation(GfxRenderer::Orientation orientation) {
 static void getLogicalWindowSize(GfxRenderer::Orientation orientation,
                                  int *width, int *height) {
   const bool isPortrait = isPortraitOrientation(orientation);
-  *width =
-      (isPortrait ? HalDisplay::DISPLAY_HEIGHT : HalDisplay::DISPLAY_WIDTH) *
-      SIMULATOR_WINDOW_SCALE;
-  *height =
-      (isPortrait ? HalDisplay::DISPLAY_WIDTH : HalDisplay::DISPLAY_HEIGHT) *
-      SIMULATOR_WINDOW_SCALE;
+  *width = isPortrait ? HalDisplay::DISPLAY_HEIGHT : HalDisplay::DISPLAY_WIDTH;
+  *height = isPortrait ? HalDisplay::DISPLAY_WIDTH : HalDisplay::DISPLAY_HEIGHT;
 }
 
 static void applyWindowGeometryIfNeeded(GfxRenderer::Orientation orientation) {
@@ -277,7 +327,20 @@ static void applyWindowGeometryIfNeeded(GfxRenderer::Orientation orientation) {
   if (winW == currentWindowWidth && winH == currentWindowHeight)
     return;
 
-  SDL_SetWindowSize(window, winW, winH);
+  int actualWidth = winW;
+  int actualHeight = winH;
+  if (BoardConfig::isReadPico()) {
+    SDL_Rect usable{};
+    const int displayIndex = SDL_GetWindowDisplayIndex(window);
+    if (SDL_GetDisplayUsableBounds(displayIndex, &usable) == 0) {
+      // Leave room for window decorations and keep the panel's pixel aspect.
+      const double scale = std::min({1.0, std::max(1, usable.w - 48) / static_cast<double>(winW),
+                                     std::max(1, usable.h - 48) / static_cast<double>(winH)});
+      actualWidth = std::max(1, static_cast<int>(winW * scale));
+      actualHeight = std::max(1, static_cast<int>(winH * scale));
+    }
+  }
+  SDL_SetWindowSize(window, actualWidth, actualHeight);
   SDL_RenderSetLogicalSize(sdl_renderer, winW, winH);
   currentWindowWidth = winW;
   currentWindowHeight = winH;
@@ -294,7 +357,9 @@ HalDisplay::~HalDisplay() {}
 #define SIMULATOR_CONTROLLER_TITLE "SSD1677"
 #endif
 
-#if defined(SIMULATOR_DEVICE_EEGO_A4)
+#if defined(SIMULATOR_DEVICE_READPICO)
+static constexpr const char* WINDOW_TITLE = "Simulator - Read Pico (E0470A01)";
+#elif defined(SIMULATOR_DEVICE_EEGO_A4)
 static constexpr const char *WINDOW_TITLE = "Simulator - eego A4 (UC8279C)";
 #elif defined(SIMULATOR_DEVICE_MURPHY_M4)
 static constexpr const char *WINDOW_TITLE = "Simulator - Murphy M4 (SSD1677)";
@@ -347,8 +412,9 @@ void HalDisplay::begin() {
   // Keep all rendering logic in logical (winW×winH) coordinates; SDL maps to
   // drawable pixels.
   SDL_RenderSetLogicalSize(sdl_renderer, winW, winH);
-  currentWindowWidth = winW;
-  currentWindowHeight = winH;
+  currentWindowWidth = 0;
+  currentWindowHeight = 0;
+  applyWindowGeometryIfNeeded(renderer.getOrientation());
 
   // Linear filtering: Bayer-dithered pixels average to correct gray at scaled
   // sizes rather than showing harsh black/white patterns.
@@ -372,8 +438,8 @@ void HalDisplay::drawImage(const uint8_t *imageData, uint16_t x, uint16_t y,
     const uint16_t destY = y + row;
     if (destY >= DISPLAY_HEIGHT)
       break;
-    const uint16_t destOffset = destY * DISPLAY_WIDTH_BYTES + (x / 8);
-    const uint16_t srcOffset = row * imageWidthBytes;
+    const size_t destOffset = static_cast<size_t>(destY) * DISPLAY_WIDTH_BYTES + (x / 8);
+    const size_t srcOffset = static_cast<size_t>(row) * imageWidthBytes;
     for (uint16_t col = 0; col < imageWidthBytes; col++) {
       if ((x / 8 + col) >= DISPLAY_WIDTH_BYTES)
         break;
@@ -391,8 +457,8 @@ void HalDisplay::drawImageTransparent(const uint8_t *imageData, uint16_t x,
     const uint16_t destY = y + row;
     if (destY >= DISPLAY_HEIGHT)
       break;
-    const uint16_t destOffset = destY * DISPLAY_WIDTH_BYTES + (x / 8);
-    const uint16_t srcOffset = row * imageWidthBytes;
+    const size_t destOffset = static_cast<size_t>(destY) * DISPLAY_WIDTH_BYTES + (x / 8);
+    const size_t srcOffset = static_cast<size_t>(row) * imageWidthBytes;
     for (uint16_t col = 0; col < imageWidthBytes; col++) {
       if ((x / 8 + col) >= DISPLAY_WIDTH_BYTES)
         break;
@@ -401,10 +467,13 @@ void HalDisplay::drawImageTransparent(const uint8_t *imageData, uint16_t x,
   }
 }
 
-void HalDisplay::setInverted(bool value) { inverted = value; }
+void HalDisplay::setInverted(bool value) {
+  if (inverted != value) cancelGrayscale16();
+  inverted = value;
+}
 
 bool HalDisplay::toggleInverted() {
-  inverted = !inverted;
+  setInverted(!inverted);
   return inverted;
 }
 
@@ -516,6 +585,12 @@ uint8_t *HalDisplay::getFrameBuffer() const {
 }
 
 uint8_t *HalDisplay::lendFrameBufferStorage(uint32_t *sizeOut) {
+#if FREEINK_DEVICE_READPICO
+  if (grayscale16Active) {
+    if (sizeOut) *sizeOut = 0;
+    return nullptr;
+  }
+#endif
   if (sizeOut) {
     *sizeOut = frameBufferLent ? 0 : BUFFER_SIZE;
   }
@@ -543,12 +618,12 @@ HalDisplay::GrayscaleCapabilities HalDisplay::grayscaleCapabilities(
   if (mode == GrayscaleMode::Absolute || mode == GrayscaleMode::Direct) {
     return {GrayscaleEncoding::AbsolutePlanes,
             mode == GrayscaleMode::Direct ? GrayscaleBase::Combined : GrayscaleBase::Separate,
-            true, false, false};
+            !BoardConfig::isReadPico(), false, false};
   }
   return {GrayscaleEncoding::OverlayMasks,
           combinesGrayscaleBase() ? GrayscaleBase::Combined
                                   : GrayscaleBase::Separate,
-          true, false, false};
+          !BoardConfig::isReadPico(), false, false};
 }
 
 void HalDisplay::copyGrayscaleBuffers(const uint8_t *lsbBuffer,
@@ -621,12 +696,47 @@ void HalDisplay::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t *rows,
     grayscalePreviewState.msbValid = true;
   }
 }
-bool HalDisplay::supportsStripGrayscale() const { return true; }
+bool HalDisplay::supportsStripGrayscale() const { return !BoardConfig::isReadPico(); }
 bool HalDisplay::supportsAsyncGrayscaleBase() const {
   return grayscaleCapabilities().asyncBase;
 }
 bool HalDisplay::combinesGrayscaleBase() const {
-  return BoardConfig::isPaperMono();
+  return BoardConfig::isPaperMono() || BoardConfig::isReadPico();
+}
+
+uint8_t HalDisplay::getGrayscaleLevels() const { return BoardConfig::ACTIVE.grayscaleLevels; }
+
+uint8_t* HalDisplay::beginGrayscale16() {
+#if FREEINK_DEVICE_READPICO
+  if (grayscale16Active || frameBufferLent || isInverted()) return nullptr;
+  grayscale16Active = true;
+  grayscale16Buffer.fill(0xFF);
+  return grayscale16Buffer.data();
+#else
+  return nullptr;
+#endif
+}
+
+bool HalDisplay::commitGrayscale16() {
+#if FREEINK_DEVICE_READPICO
+  if (!grayscale16Active) return false;
+  grayscale16Active = false;
+  const std::lock_guard<std::mutex> lock(pixelBufMutex);
+  for (size_t i = 0; i < DISPLAY_WIDTH * DISPLAY_HEIGHT; ++i) {
+    const uint8_t level = (grayscale16Buffer[i / 2] >> ((i & 1) * 4)) & 0x0F;
+    pixelBuf[i] = argbGray(level * 17);
+  }
+  pendingPresent.store(true);
+  return true;
+#else
+  return false;
+#endif
+}
+
+void HalDisplay::cancelGrayscale16() {
+#if FREEINK_DEVICE_READPICO
+  grayscale16Active = false;
+#endif
 }
 
 uint16_t HalDisplay::getDisplayWidth() const { return DISPLAY_WIDTH; }
