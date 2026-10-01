@@ -467,10 +467,13 @@ void HalDisplay::drawImageTransparent(const uint8_t *imageData, uint16_t x,
   }
 }
 
-void HalDisplay::setInverted(bool value) { inverted = value; }
+void HalDisplay::setInverted(bool value) {
+  if (inverted != value) cancelGrayscale16();
+  inverted = value;
+}
 
 bool HalDisplay::toggleInverted() {
-  inverted = !inverted;
+  setInverted(!inverted);
   return inverted;
 }
 
@@ -705,7 +708,7 @@ uint8_t HalDisplay::getGrayscaleLevels() const { return BoardConfig::ACTIVE.gray
 
 uint8_t* HalDisplay::beginGrayscale16() {
 #if FREEINK_DEVICE_READPICO
-  if (grayscale16Active || frameBufferLent) return nullptr;
+  if (grayscale16Active || frameBufferLent || isInverted()) return nullptr;
   grayscale16Active = true;
   grayscale16Buffer.fill(0xFF);
   return grayscale16Buffer.data();
@@ -721,7 +724,7 @@ bool HalDisplay::commitGrayscale16() {
   const std::lock_guard<std::mutex> lock(pixelBufMutex);
   for (size_t i = 0; i < DISPLAY_WIDTH * DISPLAY_HEIGHT; ++i) {
     const uint8_t level = (grayscale16Buffer[i / 2] >> ((i & 1) * 4)) & 0x0F;
-    pixelBuf[i] = argbGray(isInverted() ? 255 - level * 17 : level * 17);
+    pixelBuf[i] = argbGray(level * 17);
   }
   pendingPresent.store(true);
   return true;

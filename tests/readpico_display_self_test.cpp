@@ -148,6 +148,13 @@ int main(int argc, char** argv) {
   assert(!gpio.isXteinkDevice() && !gpio.hasEdgeSideButtons());
   testImages();
   testTouch();
+  display.setInverted(true);
+  assert(!display.beginGrayscale16());
+  display.setInverted(false);
+  assert(display.beginGrayscale16());
+  assert(display.toggleInverted());
+  assert(!display.commitGrayscale16());
+  display.setInverted(false);
   assert(!display.commitGrayscale16());
   uint8_t* native = display.beginGrayscale16();
   assert(native && !display.beginGrayscale16());
