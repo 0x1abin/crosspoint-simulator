@@ -18,6 +18,9 @@
 GfxRenderer renderer;
 ESPMock ESP;
 
+static_assert(BoardConfig::READ_PICO.viewableInsets.top == 5 && BoardConfig::READ_PICO.viewableInsets.right == 5 &&
+              BoardConfig::READ_PICO.viewableInsets.bottom == 8 && BoardConfig::READ_PICO.viewableInsets.left == 5);
+
 static void testImages() {
   static std::array<uint8_t, HalDisplay::BUFFER_SIZE> source{};
   for (size_t i = 0; i < source.size(); ++i) source[i] = static_cast<uint8_t>((i / 152) ^ i);
