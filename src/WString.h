@@ -8,6 +8,7 @@
 #define ARDUINOJSON_ENABLE_ARDUINO_STRING 1
 #endif
 
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -109,8 +110,20 @@ public:
   void replace(const String &find, const String &replaceWith) {
     replace(find.s.c_str(), replaceWith.s.c_str());
   }
+  void toLowerCase() {
+    for (char &c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  auto begin() const { return s.begin(); }
+  auto end() const { return s.end(); }
   bool isEmpty() const { return s.empty(); }
   size_t length() const { return s.length(); }
+  void remove(size_t index) {
+    if (index < s.size()) s.erase(index);
+  }
+  bool reserve(size_t capacity) {
+    s.reserve(capacity);
+    return true;
+  }
   const char *c_str() const { return s.c_str(); }
   bool operator==(const char *other) const { return s == (other ? other : ""); }
   bool operator!=(const char *other) const { return !(*this == other); }

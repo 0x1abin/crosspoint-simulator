@@ -12,6 +12,7 @@
 #include <IPAddress.h>
 #include <esp_http_client.h>
 #include <mbedtls/sha256.h>
+#include <nvs.h>
 
 #include <array>
 #include <cassert>
@@ -38,6 +39,31 @@ esp_err_t captureHeader(esp_http_client_event_t *event) {
   return ESP_OK;
 }
 
+void testNvsBlobs() {
+  const auto root = std::filesystem::temp_directory_path() / "crosspoint-host-compat-nvs";
+  std::filesystem::remove_all(root);
+  setenv("CROSSPOINT_SIM_NVS", root.c_str(), 1);
+  nvs_handle_t handle = 0;
+  assert(nvs_open("devid", NVS_READWRITE, &handle) == ESP_OK);
+  uint8_t value[4] = {1, 2, 3, 4};
+  size_t length = sizeof(value);
+  assert(nvs_get_blob(handle, "secret", value, &length) == ESP_ERR_NVS_NOT_FOUND);
+  assert(nvs_set_blob(handle, "secret", value, sizeof(value)) == ESP_OK);
+  assert(nvs_commit(handle) == ESP_OK);
+  nvs_close(handle);
+  assert(nvs_open("devid", NVS_READONLY, &handle) == ESP_OK);
+  uint8_t readback[4] = {};
+  length = 1;
+  assert(nvs_get_blob(handle, "secret", readback, &length) == ESP_ERR_NVS_INVALID_LENGTH);
+  assert(length == 4);
+  assert(nvs_get_blob(handle, "secret", readback, &length) == ESP_OK);
+  assert(std::memcmp(value, readback, sizeof(value)) == 0);
+  assert(nvs_set_blob(handle, "secret", value, sizeof(value)) == ESP_FAIL);
+  nvs_close(handle);
+  unsetenv("CROSSPOINT_SIM_NVS");
+  std::filesystem::remove_all(root);
+}
+
 void testDeviceProfile() {
 #if defined(SIMULATOR_DEVICE_READPICO)
   static_assert(EInkDisplay::DISPLAY_WIDTH == 1216);
@@ -46,7 +72,10 @@ void testDeviceProfile() {
   assert(std::strcmp(BoardConfig::ACTIVE.name, "read_pico") == 0);
   assert(BoardConfig::ACTIVE.grayscaleLevels == 16);
   assert(BoardConfig::ACTIVE.touch.controller == BoardConfig::TouchController::Cst836u);
-  assert(BoardConfig::ACTIVE.viewableInsets.bottom == 24);
+  assert(BoardConfig::ACTIVE.viewableInsets.top == 5);
+  assert(BoardConfig::ACTIVE.viewableInsets.right == 5);
+  assert(BoardConfig::ACTIVE.viewableInsets.bottom == 8);
+  assert(BoardConfig::ACTIVE.viewableInsets.left == 5);
   assert(BoardConfig::hasTouch());
   assert(!BoardConfig::hasHomeKey());
   assert(!BoardConfig::hasPwmFrontlight());
@@ -153,6 +182,13 @@ int main() {
   assert(ESP.getMaxAllocPsram() == heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
 
   testDeviceProfile();
+  String mixed("PlUgIn_é");
+  mixed.toLowerCase();
+  assert(mixed == "plugin_é");
+  std::string iterated;
+  for (char c : mixed) iterated += c;
+  assert(iterated == mixed.c_str());
+  testNvsBlobs();
   testSystemInfo();
   std::array<uint8_t, 32> randomBytes{};
   esp_fill_random(randomBytes.data(), randomBytes.size());

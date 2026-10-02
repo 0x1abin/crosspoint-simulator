@@ -669,6 +669,12 @@ void WebServer::begin() {
           impl_->port);
 }
 
+void WebServer::releaseRequestArguments() {
+  // Requests run on the worker; the application loop must not clear an
+  // in-flight handler's arguments. resetRequest releases them on completion.
+  if (std::this_thread::get_id() == impl_->worker.get_id()) impl_->currentArgs.clear();
+}
+
 void WebServer::handleClient() {}
 
 void WebServer::on(const char *uri, int method, std::function<void()> handler) {
