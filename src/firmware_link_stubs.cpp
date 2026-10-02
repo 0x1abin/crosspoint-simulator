@@ -6,6 +6,13 @@
 #include <cstdint>
 
 #include <Logging.h>
+#include <ContentProtection.h>
+
+std::unique_ptr<freeink::content::ContentDecryptor> freeink::content::openProtectedBook(const std::string&,
+                                                                                       std::string& err) {
+  err.clear();
+  return nullptr;
+}
 
 // ---------------------------------------------------------------------------
 // MySerialImpl

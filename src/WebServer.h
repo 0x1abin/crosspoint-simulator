@@ -72,6 +72,7 @@ public:
   ~WebServer();
   void begin();
   void handleClient();
+  void releaseRequestArguments();
   void enableCORS(bool /*enabled*/) {
     // Host responses already include Access-Control-Allow-Origin.
   }

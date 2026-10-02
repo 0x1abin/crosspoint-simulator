@@ -53,6 +53,7 @@ public:
     responseBody_.s.clear();
     responseStream_.reset();
     statusCode_ = 0;
+    responseComplete_ = false;
   }
   void setFollowRedirects(int mode) { (void)mode; }
   void setReuse(bool reuse) { (void)reuse; }
@@ -79,6 +80,7 @@ public:
 
   String getString() { return responseBody_; }
   int getSize() { return static_cast<int>(responseBody_.length()); }
+  bool responseComplete() const { return responseComplete_; }
   Stream *getStreamPtr() {
     if (!responseStream_)
       responseStream_ = std::make_unique<ResponseBodyStream>(responseBody_);
@@ -102,6 +104,7 @@ public:
     responseBody_ = "";
     responseStream_.reset();
     statusCode_ = 0;
+    responseComplete_ = false;
   }
 
   static String errorToString(int error) {
@@ -169,6 +172,7 @@ private:
   String responseBody_;
   std::unique_ptr<ResponseBodyStream> responseStream_;
   int statusCode_ = 0;
+  bool responseComplete_ = false;
 
   int perform(const char *method, const char *body) {
     if (url_.empty())
@@ -179,12 +183,14 @@ private:
       responseBody_ = "";
       responseStream_.reset();
       statusCode_ = 0;
+      responseComplete_ = false;
       return simCurlExitCodeToHttpError(response.curlExitCode);
     }
 
     responseBody_ = response.body;
     responseStream_.reset();
     statusCode_ = response.statusCode;
+    responseComplete_ = response.curlExitCode == 0;
     return statusCode_;
   }
 };

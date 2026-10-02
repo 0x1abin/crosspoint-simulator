@@ -47,6 +47,8 @@ public:
   // bytes read.
   size_t readFileToBuffer(const char *path, char *buffer, size_t bufferSize,
                           size_t maxBytes = 0);
+  bool readFileToString(const char *moduleName, const std::string &path,
+                        size_t cap, std::string &out);
   // Write a string to `path` on the SD card. Overwrites existing file.
   // Returns true on success.
   bool writeFile(const char *path, const String &content);
@@ -59,6 +61,7 @@ public:
   bool exists(const char *path);
   bool remove(const char *path);
   bool rename(const char *oldPath, const char *newPath);
+  bool replaceFile(const char *tmpPath, const char *path);
   bool rmdir(const char *path);
 
   bool openFileForRead(const char *moduleName, const char *path, HalFile &file);
@@ -111,6 +114,7 @@ public:
   bool seek64(uint64_t pos);
   bool seekCur(int64_t offset);
   bool seekSet(size_t offset);
+  bool truncate(uint64_t length);
   int available() const;
   size_t position() const;
   int read(void *buf, size_t count);
