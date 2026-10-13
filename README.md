@@ -66,8 +66,6 @@ these flags:
   capacitive keys; only Power wakes from sleep. Its window fits the usable desktop
   without upscaling, while BMP screenshots retain native oriented pixels and the
   profile carries the current `{5,5,8,5}` portrait insets, matching the firmware SDK.
-- `-DSIMULATOR_DEVICE_EEGO_A4` selects the 768x552 eego A4 profile with touch,
-  the capacitive Home/Back key, RTC, and its symmetric viewable margin.
 - `-DSIMULATOR_DEVICE_MURPHY_M4` selects the 800x480 Murphy M4 profile with
   touch, RTC, and warm/cool frontlight state.
 - `-DSIMULATOR_DEVICE_MOFEI_M4` is retained as a compatibility alias for
@@ -79,13 +77,25 @@ these flags:
   SSD1677 profile. It exposes FT6336-compatible touch and swipe input, the RTC,
   and single-channel frontlight state without a Home key or color-temperature
   control.
+- `-DSIMULATOR_DEVICE_METALIO_EINK4` selects the Metalio E-Ink 4's 800x480
+  SSD1677 profile with CST816S-compatible touch, cover Home-key input, RTC,
+  tilt availability, and haptic settings. It has no frontlight. Return maps to
+  BOOT/confirm, P to power, and Up/Down to volume; Page Up/Page Down model
+  cover Prev/Next. Escape and Left/Right are disabled because this board has no corresponding buttons.
+  See [the profile contract and verification](docs/metalio-eink4.md).
+- `-DSIMULATOR_DEVICE_EEGO_A4` selects the EEGO A4's 768x552 UC8279C
+  profile, GSLX680-compatible touch, RTC and optional warm/cool I2C frontlight.
+  Up/Down and P are its only physical buttons; H models the touch controller's
+  screen-key events. Add `-DSIMULATOR_EEGO_NO_FRONTLIGHT` for a lightless unit.
+  See [the profile contract and verification](docs/eego-a4.md).
 - `-DSIMULATOR_DISPLAY_UC8179` selects the newer UC8179 controller used by
   some X4 and X4 Pro production batches.
 - `-DSIMULATOR_DISPLAY_UC8279` selects UC8279d on X3, or the 800x480 UC8279
   controller on X4-family profiles.
 
 The sample PlatformIO files include ready-to-use environments for the original
-profiles plus `simulator_eego_a4`, `simulator_murphy_m4`,
+profiles plus `simulator_eego_a4`, `simulator_eego_a4_no_frontlight`,
+`simulator_metalio_eink4`, `simulator_murphy_m4`,
 `simulator_mofei_m4`, `simulator_sticky`, `simulator_papermono`,
 `simulator_x3_uc8279`, `simulator_x4_uc8179`, `simulator_x4_uc8279`,
 `simulator_x4_pro_uc8179`, `simulator_x4_pro_uc8279`, and the three
@@ -172,10 +182,10 @@ tests/run_host_compat_self_test.sh
 | Escape | Back                               |
 | P      | Power                              |
 | S      | Simulate sleep                     |
-| H      | X4 Pro/eego A4 Home key            |
+| H      | X4 Pro / EEGO A4 / Metalio Home key |
 | Mouse  | Touch-device tap, drag, and swipe  |
 
-When the simulator is on the sleep screen, A4 and M4 accept only Power as a
+When the simulator is on the sleep screen, EEGO A4, M4 and Read Pico accept only Power as a
 wake source; existing profiles retain their generic mapped-key wake behavior.
 Under the hood the simulator relaunches itself and reports a synthetic
 power-button wake, because the native build has no real ESP deep-sleep resume
@@ -190,7 +200,9 @@ tests possible without desktop-control permissions:
   `<milliseconds>:<action>`, separated by semicolons. Button actions use
   `<key>[:<hold-milliseconds>]`; keys are `BACK`, `ENTER`, `LEFT`, `RIGHT`,
   `UP`, `DOWN`, `POWER`, `SLEEP`, `HOME`, and `QUIT`. A normal key press is
-  held for 80 ms unless a duration is provided.
+  held for 80 ms unless a duration is provided. Metalio also accepts `PREV`
+  and `NEXT` for its capacitive cover page keys; `UP`/`DOWN` remain physical
+  volume keys.
 - Touch-device actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
   `SWIPE:<x1>,<y1>,<x2>,<y2>[,<duration-milliseconds>]`. Coordinates are in
   displayed logical pixels, so they match UI layouts and screenshots after the
@@ -299,6 +311,32 @@ custom_simulator_http_port = 18080
 
 Direct binary launches use the environment variable form.
 
+To open the web manager, select **File Transfer → Create Hotspot** in the
+simulator, then open `http://127.0.0.1:8080/` in your host browser. The simulated
+hotspot uses the host's loopback interface; no Wi-Fi connection is required.
+Keep the File Transfer screen open while using the browser.
+
+If `/settings` returns 404 or you see a reduced simulator file-transfer page,
+your environment still selects the legacy substitute. Update it to match the
+current sample: remove the `network/CrossPointWebServer.cpp` and
+`network/WebDAVHandler.cpp` exclusions from `build_src_filter`, add
+`-DCROSSPOINT_SIMULATOR_PROJECT_WEBSERVER` to `build_flags`, and rebuild.
+This compiles the firmware's actual web manager against the host network shims.
+
+From the firmware project, run the isolated HTTP smoke check after building:
+
+```bash
+python3 .pio/libdeps/simulator/simulator/test/web_manager_smoke.py \
+  .pio/build/simulator/program
+```
+
+The check navigates an empty simulated SD card to Create Hotspot and verifies
+the web pages, settings API, WebDAV, and WebSocket handshake. It uses a temporary
+directory and leaves your project's `fs_` untouched.
+
+The crypto endpoint supports host SHA-1/SHA-256 hashes and random bytes.
+Protected-book AES, RSA, and PKCS#12 operations return errors in the simulator.
+
 **Firmware updates**: OTA and SD-card firmware flashing are non-destructive in
 the simulator. The simulator stubs those update paths so the UI can be opened
 without flashing firmware or changing boot partitions.
@@ -328,3 +366,9 @@ hardware memory budgets, raw digitizer calibration or physical peripherals.
 
 The existing `bash tests/run_host_compat_self_test.sh` also covers Read Pico's
 identity, capabilities, host RTC and storage.
+
+ReadPico grayscale reports only Overlay support: its base is deferred until a
+successful gray commit. Cancellation discards pending pixels; cleanup with a B/W
+snapshot can submit a fallback. Power releases retain their measured duration,
+so a long press is not classified as a short Confirm click. EEGO Home and screen
+contacts share a cancellation barrier until both are released.

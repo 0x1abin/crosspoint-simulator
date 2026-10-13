@@ -20,6 +20,12 @@ public:
   String(const char *str) : s(str ? str : "") {}
   explicit String(const std::string &str) : s(str) {}
   String(uint16_t num) : s(std::to_string(num)) {}
+  auto begin() const { return s.begin(); }
+  auto end() const { return s.end(); }
+  void toLowerCase() {
+    for (char &c : s)
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
 
   String &operator=(const char *str) {
     s = str ? str : "";
@@ -110,11 +116,6 @@ public:
   void replace(const String &find, const String &replaceWith) {
     replace(find.s.c_str(), replaceWith.s.c_str());
   }
-  void toLowerCase() {
-    for (char &c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  }
-  auto begin() const { return s.begin(); }
-  auto end() const { return s.end(); }
   bool isEmpty() const { return s.empty(); }
   size_t length() const { return s.length(); }
   void remove(size_t index) {

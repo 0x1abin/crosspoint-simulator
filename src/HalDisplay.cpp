@@ -44,6 +44,8 @@ struct GrayscalePreviewState {
   bool lsbValid = false;
   bool msbValid = false;
   bool absolute = false;
+  bool basePending = false;
+  bool committed = false;
 };
 
 constexpr uint8_t kGrayWhite = 255;
@@ -360,11 +362,13 @@ HalDisplay::~HalDisplay() {}
 #if defined(SIMULATOR_DEVICE_READPICO)
 static constexpr const char* WINDOW_TITLE = "Simulator - Read Pico (E0470A01)";
 #elif defined(SIMULATOR_DEVICE_EEGO_A4)
-static constexpr const char *WINDOW_TITLE = "Simulator - eego A4 (UC8279C)";
+static constexpr const char *WINDOW_TITLE = "Simulator - EEGO A4 (UC8279C)";
 #elif defined(SIMULATOR_DEVICE_MURPHY_M4)
 static constexpr const char *WINDOW_TITLE = "Simulator - Murphy M4 (SSD1677)";
 #elif defined(SIMULATOR_DEVICE_MOFEI_M4)
 static constexpr const char *WINDOW_TITLE = "Simulator - Mofei M4 (SSD1677)";
+#elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
+static constexpr const char *WINDOW_TITLE = "Simulator - Metalio E-Ink 4 (SSD1677)";
 #elif defined(SIMULATOR_DEVICE_PAPERMONO)
 static constexpr const char *WINDOW_TITLE =
     "Simulator - M5Stack PaperMono (SSD1677)";
@@ -506,6 +510,8 @@ void HalDisplay::refreshDisplay(RefreshMode /*mode*/, bool /*turnOffScreen*/) {
   const uint8_t *fb = getFrameBuffer();
   snapshotBwBase(fb);
   renderBwPixels(fb);
+  grayscalePreviewState.basePending = false;
+  grayscalePreviewState.committed = true;
 }
 
 // Called from the main thread (simulator_main.cpp) to push pixels to SDL.
@@ -613,11 +619,27 @@ HalDisplay::Controller HalDisplay::getController() const {
   return BoardConfig::ACTIVE.displayController;
 }
 
-HalDisplay::GrayscaleCapabilities HalDisplay::grayscaleCapabilities(
-    GrayscaleMode mode) const {
+HalDisplay::GrayscaleCapabilities
+HalDisplay::grayscaleCapabilities(GrayscaleMode mode) const {
+  if (getController() == Controller::UC8279 &&
+      BoardConfig::ACTIVE.displayControllerVariant == 0x67)
+    return {};
+  if (BoardConfig::isReadPico()) {
+    if (mode != GrayscaleMode::Overlay)
+      return {};
+    return {GrayscaleEncoding::OverlayMasks, GrayscaleBase::Combined, false,
+            false, false};
+  }
+  if (BoardConfig::isEegoA4()) {
+    if (mode != GrayscaleMode::Overlay)
+      return {};
+    return {GrayscaleEncoding::OverlayMasks, GrayscaleBase::Separate, false,
+            false, false};
+  }
   if (mode == GrayscaleMode::Absolute || mode == GrayscaleMode::Direct) {
     return {GrayscaleEncoding::AbsolutePlanes,
-            mode == GrayscaleMode::Direct ? GrayscaleBase::Combined : GrayscaleBase::Separate,
+            mode == GrayscaleMode::Direct ? GrayscaleBase::Combined
+                                          : GrayscaleBase::Separate,
             !BoardConfig::isReadPico(), false, false};
   }
   return {GrayscaleEncoding::OverlayMasks,
@@ -633,20 +655,18 @@ void HalDisplay::copyGrayscaleBuffers(const uint8_t *lsbBuffer,
 }
 void HalDisplay::displayGrayscaleBase(RefreshMode fallback,
                                       bool turnOffScreen) {
-  grayscalePreviewState.absolute = false;
-  if (combinesGrayscaleBase()) {
-    snapshotBwBase(getFrameBuffer());
-    return;
-  }
-  displayBuffer(fallback, turnOffScreen);
+  if (!displayGrayscaleBase(GrayscaleMode::Overlay, fallback, turnOffScreen))
+    displayBuffer(fallback, turnOffScreen);
 }
-bool HalDisplay::displayGrayscaleBase(GrayscaleMode mode,
-                                      RefreshMode fallback,
+bool HalDisplay::displayGrayscaleBase(GrayscaleMode mode, RefreshMode fallback,
                                       bool turnOffScreen) {
-  if (!grayscaleCapabilities(mode).supported()) return false;
+  if (!grayscaleCapabilities(mode).supported())
+    return false;
   grayscalePreviewState.absolute = mode != GrayscaleMode::Overlay;
-  if (combinesGrayscaleBase() && mode == GrayscaleMode::Overlay) {
+  if (grayscaleCapabilities(mode).base == GrayscaleBase::Combined) {
     snapshotBwBase(getFrameBuffer());
+    grayscalePreviewState.basePending = true;
+    grayscalePreviewState.committed = false;
     return true;
   }
   displayBuffer(fallback, turnOffScreen);
@@ -656,29 +676,56 @@ void HalDisplay::preconditionGrayscale() {}
 void HalDisplay::preconditionGrayscale(uint16_t, uint16_t, uint16_t, uint16_t) {
 }
 void HalDisplay::copyGrayscaleLsbBuffers(const uint8_t *lsbBuffer) {
+  if (!grayscaleCapabilities(grayscalePreviewState.absolute
+                                 ? GrayscaleMode::Absolute
+                                 : GrayscaleMode::Overlay)
+           .supported())
+    return;
   copyPlane(grayscalePreviewState.lsbPlane, lsbBuffer,
             grayscalePreviewState.lsbValid);
 }
 void HalDisplay::copyGrayscaleMsbBuffers(const uint8_t *msbBuffer) {
+  if (!grayscaleCapabilities(grayscalePreviewState.absolute
+                                 ? GrayscaleMode::Absolute
+                                 : GrayscaleMode::Overlay)
+           .supported())
+    return;
   copyPlane(grayscalePreviewState.msbPlane, msbBuffer,
             grayscalePreviewState.msbValid);
 }
 void HalDisplay::cleanupGrayscaleBuffers(const uint8_t *bwBuffer) {
   if (bwBuffer) {
+    if (grayscalePreviewState.basePending) {
+      renderBwPixels(bwBuffer);
+      grayscalePreviewState.committed = true;
+    }
     snapshotBwBase(bwBuffer);
   } else {
     grayscalePreviewState.bwBaseValid = false;
     grayscalePreviewState.bwBase.fill(0);
     clearGrayscalePlanes();
   }
+  grayscalePreviewState.basePending = false;
+  grayscalePreviewState.absolute = false;
 }
 void HalDisplay::displayGrayBuffer(bool, const unsigned char *, bool) {
+  if (!grayscaleCapabilities(grayscalePreviewState.absolute
+                                 ? GrayscaleMode::Absolute
+                                 : GrayscaleMode::Overlay)
+           .supported())
+    return;
   composeGrayscalePreview();
+  grayscalePreviewState.basePending = false;
+  grayscalePreviewState.committed = true;
 }
 
 void HalDisplay::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t *rows,
                                           uint16_t yStart, uint16_t numRows) {
-  if (!rows || numRows == 0 || yStart >= DISPLAY_HEIGHT) {
+  if (!grayscaleCapabilities(grayscalePreviewState.absolute
+                                 ? GrayscaleMode::Absolute
+                                 : GrayscaleMode::Overlay)
+           .supported() ||
+      !rows || numRows == 0 || yStart >= DISPLAY_HEIGHT) {
     return;
   }
 
@@ -696,7 +743,9 @@ void HalDisplay::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t *rows,
     grayscalePreviewState.msbValid = true;
   }
 }
-bool HalDisplay::supportsStripGrayscale() const { return !BoardConfig::isReadPico(); }
+bool HalDisplay::supportsStripGrayscale() const {
+  return grayscaleCapabilities().stripUploads;
+}
 bool HalDisplay::supportsAsyncGrayscaleBase() const {
   return grayscaleCapabilities().asyncBase;
 }
@@ -706,9 +755,11 @@ bool HalDisplay::combinesGrayscaleBase() const {
 
 uint8_t HalDisplay::getGrayscaleLevels() const { return BoardConfig::ACTIVE.grayscaleLevels; }
 
-uint8_t* HalDisplay::beginGrayscale16() {
+uint8_t *HalDisplay::beginGrayscale16() {
 #if FREEINK_DEVICE_READPICO
-  if (grayscale16Active || frameBufferLent || isInverted()) return nullptr;
+  if (grayscale16Active || frameBufferLent || isInverted())
+    return nullptr;
+  grayscalePreviewState.committed = false;
   grayscale16Active = true;
   grayscale16Buffer.fill(0xFF);
   return grayscale16Buffer.data();
@@ -719,7 +770,8 @@ uint8_t* HalDisplay::beginGrayscale16() {
 
 bool HalDisplay::commitGrayscale16() {
 #if FREEINK_DEVICE_READPICO
-  if (!grayscale16Active) return false;
+  if (!grayscale16Active)
+    return false;
   grayscale16Active = false;
   const std::lock_guard<std::mutex> lock(pixelBufMutex);
   for (size_t i = 0; i < DISPLAY_WIDTH * DISPLAY_HEIGHT; ++i) {
@@ -727,6 +779,7 @@ bool HalDisplay::commitGrayscale16() {
     pixelBuf[i] = argbGray(level * 17);
   }
   pendingPresent.store(true);
+  grayscalePreviewState.committed = true;
   return true;
 #else
   return false;
@@ -747,3 +800,13 @@ uint16_t HalDisplay::getDisplayWidthBytes() const {
 uint32_t HalDisplay::getBufferSize() const { return BUFFER_SIZE; }
 
 HalDisplay display;
+
+bool HalDisplay::displayCommitted() const {
+  return grayscalePreviewState.committed;
+}
+void HalDisplay::cancelGrayscale() {
+  if (grayscalePreviewState.basePending)
+    grayscalePreviewState.committed = false;
+  grayscalePreviewState.basePending = false;
+  cleanupGrayscaleBuffers(nullptr);
+}

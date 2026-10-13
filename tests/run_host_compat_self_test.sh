@@ -34,4 +34,5 @@ for device in DEFAULT SIMULATOR_DEVICE_X3 SIMULATOR_DEVICE_X4_PRO \
   "$test_binary"
 done
 python3 "$repo_root/tests/test_button_release.py"
+python3 "$repo_root/tests/run_network_self_test.py"
 printf 'host compatibility self-test passed\n'
