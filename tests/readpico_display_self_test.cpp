@@ -118,6 +118,19 @@ static uint32_t screenshotPixel(SDL_Surface* image, int x, int y) {
 
 int main(int argc, char** argv) {
   assert(argc == 3);
+  assert(display.grayscaleCapabilities().supported());
+  assert(!display.grayscaleCapabilities(HalDisplay::GrayscaleMode::Absolute)
+              .supported());
+  assert(!display.grayscaleCapabilities(HalDisplay::GrayscaleMode::Direct)
+              .supported());
+  display.displayGrayscaleBase();
+  assert(!display.displayCommitted());
+  display.cancelGrayscale();
+  display.cleanupGrayscaleBuffers(display.getFrameBuffer());
+  assert(!display.displayCommitted());
+  display.displayGrayscaleBase();
+  display.displayGrayBuffer();
+  assert(display.displayCommitted());
   if (std::strcmp(argv[1], "wake") == 0) {
     assert(SDL_Init(SDL_INIT_TIMER) == 0);
     SimulatorLifecycle::initProcessArgs(argv);

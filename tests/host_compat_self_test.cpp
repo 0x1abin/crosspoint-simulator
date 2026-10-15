@@ -142,10 +142,11 @@ void testDeviceProfile() {
 
   auto &frontlight = HalFrontlight::getInstance();
   frontlight.begin(70, 30, true);
-  assert(frontlight.present() == BoardConfig::hasPwmFrontlight());
+  const bool hasFrontlight = BoardConfig::hasPwmFrontlight() || BoardConfig::hasI2cFrontlight();
+  assert(frontlight.present() == hasFrontlight);
   assert(frontlight.hasColorTemperature() ==
          BoardConfig::hasColorTemperatureFrontlight());
-  assert(frontlight.isOn() == BoardConfig::hasPwmFrontlight());
+  assert(frontlight.isOn() == hasFrontlight);
 }
 
 void testSystemInfo() {

@@ -12,7 +12,7 @@
 
 #if (defined(SIMULATOR_DEVICE_READPICO) + defined(SIMULATOR_DEVICE_X3) + defined(SIMULATOR_DEVICE_X4_PRO) +          \
      defined(SIMULATOR_DEVICE_X4_CLASSIC) + defined(SIMULATOR_DEVICE_STICKY) + defined(SIMULATOR_DEVICE_PAPERMONO) + \
-     defined(SIMULATOR_DEVICE_EEGO_A4) +                                                                             \
+     defined(SIMULATOR_DEVICE_EEGO_A4) + defined(SIMULATOR_DEVICE_METALIO_EINK4) +                                                                             \
      (defined(SIMULATOR_DEVICE_MURPHY_M4) || defined(SIMULATOR_DEVICE_MOFEI_M4))) > 1
 #error "Select at most one simulated device"
 #endif
@@ -26,10 +26,19 @@
 #endif
 
 #if (defined(SIMULATOR_DEVICE_READPICO) || defined(SIMULATOR_DEVICE_STICKY) || defined(SIMULATOR_DEVICE_PAPERMONO) || \
-     defined(SIMULATOR_DEVICE_EEGO_A4) || defined(SIMULATOR_DEVICE_MURPHY_M4) ||                                      \
+     defined(SIMULATOR_DEVICE_METALIO_EINK4) || defined(SIMULATOR_DEVICE_MURPHY_M4) ||                                      \
      defined(SIMULATOR_DEVICE_MOFEI_M4)) &&                                                                           \
     (defined(SIMULATOR_DISPLAY_UC8179) || defined(SIMULATOR_DISPLAY_UC8279))
-#error "This device has a fixed display controller"
+#error "This device uses SSD1677 or a fixed parallel controller; do not select an Xteink controller override"
+#endif
+
+#if defined(SIMULATOR_DEVICE_EEGO_A4) &&                                       \
+    (defined(SIMULATOR_DISPLAY_UC8179) || defined(SIMULATOR_DISPLAY_UC8279))
+#error "EEGO A4 uses UC8279C; do not select an Xteink controller override"
+#endif
+
+#if defined(SIMULATOR_EEGO_NO_FRONTLIGHT) && !defined(SIMULATOR_DEVICE_EEGO_A4)
+#error "The lightless variant requires EEGO A4"
 #endif
 
 #undef FREEINK_DEVICE_READPICO
@@ -43,7 +52,29 @@
 #undef FREEINK_DEVICE_MURPHY_M4
 #undef FREEINK_DEVICE_MOFEI_M4
 
+#undef FREEINK_DEVICE_METALIO_EINK4
+
+#if defined(SIMULATOR_DEVICE_METALIO_EINK4)
+#define FREEINK_DEVICE_METALIO_EINK4 1
+#define FREEINK_CAP_HAPTIC 1
+#else
+#define FREEINK_DEVICE_METALIO_EINK4 0
+#define FREEINK_CAP_HAPTIC 0
+#endif
+
 #if defined(SIMULATOR_DEVICE_READPICO)
+#define FREEINK_DEVICE_X4 0
+#define FREEINK_DEVICE_X3 0
+#define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
+#define FREEINK_DEVICE_STICKY 0
+#define FREEINK_DEVICE_PAPERMONO 0
+#define FREEINK_DEVICE_EEGO_A4 0
+#define FREEINK_DEVICE_MURPHY_M4 0
+#define FREEINK_DEVICE_MOFEI_M4 0
+#define FREEINK_CAP_TOUCH 1
+#define FREEINK_CAP_FRONTLIGHT 0
+#elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
@@ -90,7 +121,7 @@
 #define FREEINK_DEVICE_MURPHY_M4 0
 #define FREEINK_DEVICE_MOFEI_M4 0
 #define FREEINK_CAP_TOUCH 1
-#define FREEINK_CAP_FRONTLIGHT 0
+#define FREEINK_CAP_FRONTLIGHT 1
 #elif defined(SIMULATOR_DEVICE_MURPHY_M4) ||                                 \
     defined(SIMULATOR_DEVICE_MOFEI_M4)
 #define FREEINK_DEVICE_X4 0
@@ -161,6 +192,7 @@
 #endif
 
 #define FREEINK_MCU_C3 (FREEINK_DEVICE_X3 || FREEINK_DEVICE_X4)
+#define FREEINK_CAP_WARMLIGHT (FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_EEGO_A4 || FREEINK_DEVICE_MURPHY_M4)
 
 namespace BoardConfig {
 
@@ -176,6 +208,7 @@ enum class Board {
   Sticky,
   PaperMono,
   ReadPico,
+  MetalioEInk4,
 };
 
 enum class DisplayController {
@@ -189,7 +222,7 @@ enum class DisplayController {
   UC8279C = 8,
 };
 
-enum class TouchController : uint8_t { None, Chsc6x, Gt911, Ft5x06, Ft6336u, Gslx680, Cst836u };
+enum class TouchController : uint8_t { None, Chsc6x, Gt911, Ft5x06, Ft6336u, Gslx680, Cst836u, Cst816s };
 
 struct TouchConfig {
   TouchController controller = TouchController::None;
@@ -239,19 +272,27 @@ inline constexpr BoardProfile XTEINK_X4 = {Board::XteinkX4, "xteink_x4",
                                            X4_DISPLAY_CONTROLLER_VARIANT,
                                            {4, 5}};
 inline constexpr BoardProfile XTEINK_X3 = {Board::XteinkX3, "xteink_x3",
-                                           DisplayController::UC8253, 0, {4, 5}};
+                                           DisplayController::UC8253, 0, {4, 5}, {}, 792, 528};
 inline constexpr BoardProfile XTEINK_X3_UC8279 = {
     Board::XteinkX3Uc8279, "xteink_x3_uc8279", DisplayController::UC8279, 0,
-    {4, 5}};
+    {4, 5}, {}, 792, 528};
 inline constexpr BoardProfile XTEINK_X4_PRO = {
     Board::XteinkX4Pro, "xteink_x4_pro", X4_DISPLAY_CONTROLLER,
-    X4_DISPLAY_CONTROLLER_VARIANT, {0, 7}, {}, 800, 480,
+    X4_DISPLAY_CONTROLLER_VARIANT, {0, 7}, {9, 7, 3, 7}, 800, 480,
     {TouchController::Gt911}};
 inline constexpr BoardProfile XTEINK_X4_CLASSIC = {
     Board::XteinkX4Classic, "xteink_x4_classic", X4_DISPLAY_CONTROLLER,
     X4_DISPLAY_CONTROLLER_VARIANT, {0, 7}, {9, 7, 3, 7}};
-inline constexpr BoardProfile EEGO_A4 = {
-    Board::EegoA4, "eego_a4", DisplayController::UC8279C, 0, {7, 8}};
+inline constexpr BoardProfile EEGO_A4 = {Board::EegoA4,
+                                         "eego_a4",
+                                         DisplayController::UC8279C,
+                                         0,
+                                         {5, 7},
+                                         {24, 24, 8, 24},
+                                         768,
+                                         552,
+                                         {TouchController::Gslx680}};
+
 inline constexpr BoardProfile MURPHY_M4 = {
     Board::MurphyM4, "murphy_m4", DisplayController::SSD1677, 0, {1, 2}};
 inline constexpr BoardProfile MOFEI_M4 = {
@@ -263,11 +304,23 @@ inline constexpr BoardProfile PAPER_MONO = {
     Board::PaperMono, "m5stack_paper_mono", DisplayController::SSD1677, 0,
     {0, 7}, {9, 7, 3, 7}, 800, 480, {TouchController::Ft6336u}};
 
+inline constexpr BoardProfile METALIO_EINK4 = {Board::MetalioEInk4,
+                                               "metalio_eink4",
+                                               DisplayController::SSD1677,
+                                               0,
+                                               {-1, -1},
+                                               {},
+                                               800,
+                                               480,
+                                               {TouchController::Cst816s}};
+
 inline constexpr BoardProfile READ_PICO = {Board::ReadPico, "read_pico", DisplayController::LgfxEpd, 0, {-1, -1},
                                            {5, 5, 8, 5}, 1216, 684, {TouchController::Cst836u}, 16};
 
 #if defined(SIMULATOR_DEVICE_READPICO)
 inline BoardProfile ACTIVE = READ_PICO;
+#elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
+inline BoardProfile ACTIVE = METALIO_EINK4;
 #elif defined(SIMULATOR_DEVICE_PAPERMONO)
 inline BoardProfile ACTIVE = PAPER_MONO;
 #elif defined(SIMULATOR_DEVICE_STICKY)
@@ -324,6 +377,9 @@ inline bool selectDevice(Board board) {
   case Board::ReadPico:
     ACTIVE = READ_PICO;
     return true;
+  case Board::MetalioEInk4:
+    ACTIVE = METALIO_EINK4;
+    return true;
   case Board::PaperMono:
     ACTIVE = PAPER_MONO;
     return true;
@@ -341,16 +397,18 @@ inline bool isMurphyM4() {
 inline bool isSticky() { return ACTIVE.board == Board::Sticky; }
 inline bool isReadPico() { return ACTIVE.board == Board::ReadPico; }
 inline bool isPaperMono() { return ACTIVE.board == Board::PaperMono; }
+inline bool isMetalioEInk4() { return ACTIVE.board == Board::MetalioEInk4; }
 inline bool hasTouch() {
-  return isX4Pro() || isEegoA4() || isMurphyM4() || isSticky() || isPaperMono() || isReadPico();
+  return isX4Pro() || isEegoA4() || isMurphyM4() || isSticky() || isPaperMono() || isReadPico() || isMetalioEInk4();
 }
-inline bool hasHomeKey() { return isX4Pro() || isEegoA4(); }
+inline bool hasHomeKey() { return isX4Pro() || isEegoA4() || isMetalioEInk4(); }
 inline bool hasPwmFrontlight() {
   return isX4Pro() || isMurphyM4() || isPaperMono();
 }
 inline bool hasColorTemperatureFrontlight() {
-  return isX4Pro() || isMurphyM4();
+  return isX4Pro() || isMurphyM4() || isEegoA4();
 }
+inline bool hasI2cFrontlight() { return isEegoA4(); }
 
 inline void holdPowerRails() {}
 

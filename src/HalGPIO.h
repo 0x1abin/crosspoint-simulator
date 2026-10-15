@@ -55,6 +55,7 @@ public:
   // Start button GPIO and setup SPI for screen and SD card
   void begin();
   void beginInput() {}
+  void prepareForDeepSleep() {}
 
   // Clears the per-frame press/release edge latches. Must be called exactly
   // once per frame (before the firmware's loop()), NOT on every update().
@@ -71,6 +72,8 @@ public:
   unsigned long getHeldTime() const;
   unsigned long getPowerButtonHeldTime() const;
   bool rawInputActive();
+  bool wasCapacitivePagePressed() const;
+  bool isCapacitivePagePressed(uint8_t buttonIndex) const;
   bool hasTouch() const;
   bool hasHomeKey() const;
   bool wasHomeKeyPressed() const;
@@ -97,8 +100,6 @@ public:
   // Verify power button was held long enough after wakeup.
   // The host wake path is synthetic, so verification always succeeds.
   bool verifyPowerButtonWakeup();
-  bool verifyPowerButtonWakeup(uint16_t requiredDurationMs,
-                               bool shortPressAllowed);
 
   // Check if USB is connected
   bool isUsbConnected() const;

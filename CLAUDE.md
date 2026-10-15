@@ -18,7 +18,12 @@ rm -rf ./fs_/.crosspoint/               # clear stale on-disk caches after stora
 
 For local dev against this repo, the firmware's `platformio.ini` should reference it as `simulator=symlink://../crosspoint-simulator` instead of the git URL.
 
-There are no tests, no linter, and no per-file build commands. A change is "tested" by running the simulator and exercising the affected feature.
+Host checks live in `tests/`: run `tests/run_host_compat_self_test.sh` for clock,
+hashing, HTTP and persistent NVS compatibility, and
+`python3 tests/check-profile-selection.py` plus `sh tests/run-eego.sh` or
+`sh tests/run-metalio.sh` for the affected profiles. Read Pico's SDL checks are
+documented in [README.md](README.md#read-pico-host-checks). Consumer builds and
+whole-page checks remain separate from those host tests.
 
 ## Architecture
 
@@ -40,6 +45,10 @@ The simulator is a collection of host-side reimplementations of the firmware's h
 
 - MD5: [src/MD5Builder.h](src/MD5Builder.h) is a thin dispatcher that auto-selects the implementation via `#ifdef __APPLE__` / `#elif __linux__`. [src/MD5Builder_mac.h](src/MD5Builder_mac.h) uses CommonCrypto; [src/MD5Builder_linux.h](src/MD5Builder_linux.h) uses OpenSSL. No downstream swapping is needed - just include `MD5Builder.h`.
 - Web server shims: [src/WebServer.cpp](src/WebServer.cpp), [src/WebSocketsServer.cpp](src/WebSocketsServer.cpp), and [src/NetworkClient.cpp](src/NetworkClient.cpp) expose firmware port 80 as `http://127.0.0.1:8080/` and port 81 WebSockets as `ws://127.0.0.1:8081/`. `CROSSPOINT_SIM_HTTP_PORT` moves the pair together when either port is occupied. Current CrossPoint builds compile their firmware-owned `CrossPointWebServer.cpp` and `WebDAVHandler.cpp` against these shims; `CROSSPOINT_SIMULATOR_PROJECT_WEBSERVER` disables only the legacy reduced substitute in this library.
+- Request arguments belong to the HTTP worker. `releaseRequestArguments()`
+  called from the application loop must leave an in-flight handler untouched;
+  the worker releases parsed arguments after the request, and `stop()` joins
+  the worker before releasing any remaining protected argument arrays.
 - Build flags: macOS gets architecture-correct SDL compiler and linker flags
   from `sdl2-config`, so the same sample works on Intel and Apple Silicon.
   Linux/WSL additionally links OpenSSL with
@@ -57,7 +66,11 @@ The simulator is a collection of host-side reimplementations of the firmware's h
 `SIMULATOR_DEVICE_X3` for X3, `SIMULATOR_DEVICE_X4_PRO` for X4 Pro, and
 `SIMULATOR_DEVICE_X4_CLASSIC` for X4 Classic,
 `SIMULATOR_DEVICE_STICKY` for Seeed Sticky, or
-`SIMULATOR_DEVICE_PAPERMONO` for M5Stack PaperMono.
+`SIMULATOR_DEVICE_PAPERMONO` for M5Stack PaperMono, or
+`SIMULATOR_DEVICE_METALIO_EINK4` for Metalio E-Ink 4, or
+`SIMULATOR_DEVICE_EEGO_A4` for EEGO A4. The fork also retains
+`SIMULATOR_DEVICE_READPICO` for Read Pico and `SIMULATOR_DEVICE_MURPHY_M4`
+(legacy `SIMULATOR_DEVICE_MOFEI_M4`) for Murphy M4.
 `SIMULATOR_DISPLAY_UC8179` and `SIMULATOR_DISPLAY_UC8279` select per-batch
 controller revisions without changing a device's geometry or capabilities.
 Keep the reported board and controller aligned with the firmware SDK. X4 Pro
@@ -68,6 +81,23 @@ X4 Classic uses the X4 family's 800x480 controller variants and adds RTC, tilt,
 side buttons, and front buttons without touch, a Home key, or frontlight.
 PaperMono uses an 800x480 SSD1677 panel with FT6336-compatible touch, RTC, and
 single-channel frontlight state, without a Home key or tilt.
+
+Metalio uses an 800x480 SSD1677 panel with CST816S touch, a cover Home key,
+RTC, tilt, and haptic settings, without a frontlight. Only Confirm, Power,
+Up, and Down button contacts are available; Back/Left/Right are disabled.
+Up/Down model volume and cover Prev/Next keys. Haptic calls are host no-ops.
+
+EEGO A4 uses a 768x552 UC8279C panel, GSLX680 touch, RTC, Up/Down/Power
+buttons and an optional warm/cool I2C frontlight. `SIMULATOR_EEGO_NO_FRONTLIGHT`
+models a lightless unit. Its screen-key capability matches the reviewed SDK;
+H emits press, tap and 700 ms hold events. See [docs/eego-a4.md](docs/eego-a4.md).
+
+Read Pico keeps its 1216x684 scan frame, native-size oriented screenshots,
+sixteen-level image transactions and desktop-fit window. Preserve the release
+frame's held duration and Power-only wake on Read Pico, EEGO A4 and M4 when
+integrating additional input adapters. The host clock's manual UTC offset and
+sync state must not change the operating system clock. OS-backed random bytes
+and validated persistent NVS blobs remain part of the fork compatibility contract.
 
 `HalGPIO::update` owns the SDL event pump for the whole simulator, do not poll SDL events elsewhere. Scancodes map to button indices `BTN_BACK=0` through `BTN_POWER=6`. `SDL_QUIT` sets the `quitRequested` atomic that `HalDisplay::shouldQuit()` reads.
 
