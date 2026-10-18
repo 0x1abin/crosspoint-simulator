@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <mutex>
 #include <sstream>
 #include <vector>
 
@@ -18,6 +19,8 @@ HalStorage HalStorage::instance;
 HalStorage::HalStorage() {}
 
 namespace {
+std::recursive_mutex storageTransactionMutex;
+
 std::string configuredStorageRoot() {
   const char *root = std::getenv("CROSSPOINT_SIM_SD");
   if (!root || !*root) {
@@ -78,6 +81,10 @@ bool ensureParentDirectories(const std::string &full) {
   return ::mkdir(parent.c_str(), 0777) == 0 || errno == EEXIST;
 }
 } // namespace
+
+HalStorage::StorageLock::StorageLock() { storageTransactionMutex.lock(); }
+
+HalStorage::StorageLock::~StorageLock() { storageTransactionMutex.unlock(); }
 
 bool HalStorage::begin() {
   const std::string root = configuredStorageRoot();

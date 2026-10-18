@@ -14,6 +14,8 @@ struct HeapInfo {
   uint32_t freeBytes;
   uint32_t totalBytes;
   uint32_t largestFreeBlockBytes;
+  uint32_t freePsramBytes;
+  uint32_t totalPsramBytes;
 };
 
 void begin();
