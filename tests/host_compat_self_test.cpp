@@ -15,18 +15,38 @@
 #include <nvs.h>
 
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <esp_heap_caps.h>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
 ESPMock ESP;
 
 namespace {
+void testStorageLock() {
+  std::atomic<int> counter{0};
+  const auto increment = [&] {
+    for (int i = 0; i < 1000; ++i) {
+      HalStorage::StorageLock outer;
+      HalStorage::StorageLock nested;
+      const int value = counter.load(std::memory_order_relaxed);
+      std::this_thread::yield();
+      counter.store(value + 1, std::memory_order_relaxed);
+    }
+  };
+  std::array<std::thread, 4> workers{
+      std::thread(increment), std::thread(increment),
+      std::thread(increment), std::thread(increment)};
+  for (auto &worker : workers) worker.join();
+  assert(counter == 4000);
+}
+
 struct HeaderCapture {
   std::vector<std::pair<std::string, std::string>> fields;
 };
@@ -156,6 +176,8 @@ void testSystemInfo() {
   assert(heap.freeBytes == ESP.getFreeHeap());
   assert(heap.totalBytes == ESP.getHeapSize());
   assert(heap.largestFreeBlockBytes == ESP.getMaxAllocHeap());
+  assert(heap.freePsramBytes == ESP.getFreePsram());
+  assert(heap.totalPsramBytes == ESP.getPsramSize());
 
   char storageRoot[] = "/tmp/crosspoint-simulator-storage.XXXXXX";
   assert(mkdtemp(storageRoot));
@@ -183,6 +205,7 @@ int main() {
   assert(ESP.getMaxAllocPsram() == heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
 
   testDeviceProfile();
+  testStorageLock();
   String mixed("PlUgIn_é");
   mixed.toLowerCase();
   assert(mixed == "plugin_é");

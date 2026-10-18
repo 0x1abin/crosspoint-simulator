@@ -79,7 +79,13 @@ public:
 
   static HalStorage &getInstance() { return instance; }
 
-  class StorageLock; // private class, used internally
+  class StorageLock {
+  public:
+    StorageLock();
+    ~StorageLock();
+    StorageLock(const StorageLock &) = delete;
+    StorageLock &operator=(const StorageLock &) = delete;
+  };
 
 private:
   static HalStorage instance;

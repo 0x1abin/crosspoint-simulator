@@ -15,5 +15,6 @@ bool HalSystem::getDeviceId(DeviceId& out) {
   return true;
 }
 HalSystem::HeapInfo HalSystem::getHeapInfo() {
-  return {ESP.getFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap()};
+  return {ESP.getFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap(),
+          ESP.getFreePsram(), ESP.getPsramSize()};
 }
