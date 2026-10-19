@@ -74,6 +74,8 @@ public:
   bool isCapacitivePagePressed(uint8_t buttonIndex) const;
   bool hasTouch() const;
   bool hasHomeKey() const;
+  bool hasToggleSwitch() const;
+  bool isToggleSwitchOn() const;
   bool wasHomeKeyPressed() const;
   bool wasHomeKeyTapped() const;
   bool wasHomeKeyLongPressed() const;

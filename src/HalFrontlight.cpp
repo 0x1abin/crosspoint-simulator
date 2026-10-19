@@ -31,7 +31,8 @@ bool HalFrontlight::present() const {
 }
 
 bool HalFrontlight::hasColorTemperature() const {
-  return BoardConfig::isX4Pro() || (BoardConfig::isEegoA4() && present());
+  return BoardConfig::isX4Pro() ||
+         ((BoardConfig::isEegoA4() || BoardConfig::isPicco()) && present());
 }
 
 void HalFrontlight::setBrightness(uint8_t percent) {
