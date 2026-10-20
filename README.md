@@ -74,6 +74,10 @@ these flags:
   Up/Down and P are its only physical buttons; H models the touch controller's
   screen-key events. Add `-DSIMULATOR_EEGO_NO_FRONTLIGHT` for a lightless unit.
   See [the profile contract and verification](docs/eego-a4.md).
+- `-DSIMULATOR_DEVICE_PICCO` selects the BOOX Picco's 800x480 profile with
+  touch, RTC, tilt availability and warm/cool I2C frontlight state. T models the
+  slide switch; Up/Down/P and the SDK's provisional Confirm input are available.
+  There is no Home key. See [the profile contract and limits](docs/picco.md).
 - `-DSIMULATOR_DISPLAY_UC8179` selects the newer UC8179 controller used by
   some X4 and X4 Pro production batches.
 - `-DSIMULATOR_DISPLAY_UC8279` selects UC8279d on X3, or the 800x480 UC8279
@@ -84,7 +88,7 @@ profiles plus `simulator_sticky`, `simulator_x3_uc8279`, `simulator_x4_uc8179`,
 `simulator_x4_uc8279`, `simulator_x4_pro_uc8179`, and
 `simulator_x4_pro_uc8279`, the three `simulator_x4_classic` controller
 variants, plus `simulator_papermono`, `simulator_metalio_eink4`,
-`simulator_eego_a4` and `simulator_eego_a4_no_frontlight`. The UC8279
+`simulator_eego_a4`, `simulator_eego_a4_no_frontlight` and `simulator_picco`. The UC8279
 X4 Pro path mirrors current FreeInk SDK support but remains pending validation on physical UC8279 X4 Pro
 hardware.
 
@@ -169,6 +173,7 @@ pio run -e simulator -t run_simulator
 | P      | Power                              |
 | S      | Simulate sleep                     |
 | H      | X4 Pro / Metalio cover Home key    |
+| T      | Picco slide switch on/off         |
 | Mouse  | Touch-device tap and swipe         |
 
 When the simulator is on the sleep screen, pressing any mapped simulator key wakes it. Under the hood the simulator relaunches itself and reports a synthetic power-button wake, because the native build has no real ESP deep-sleep resume path.
@@ -185,6 +190,8 @@ tests possible without desktop-control permissions:
   held for 80 ms unless a duration is provided. Metalio also accepts `PREV`
   and `NEXT` for its capacitive cover page keys; `UP`/`DOWN` remain physical
   volume keys.
+- Picco accepts `SWITCH_ON` and `SWITCH_OFF` to set the slide-switch position.
+  `CROSSPOINT_SIM_SLIDE_SWITCH=on` selects its initial position (default off).
 - Touch-device actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
   `SWIPE:<x1>,<y1>,<x2>,<y2>[,<duration-milliseconds>]`. Coordinates are in
   displayed logical pixels, so they match UI layouts and screenshots after the

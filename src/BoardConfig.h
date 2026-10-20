@@ -14,7 +14,7 @@
      defined(SIMULATOR_DEVICE_X4_CLASSIC) + defined(SIMULATOR_DEVICE_STICKY) + \
      defined(SIMULATOR_DEVICE_PAPERMONO) +                                     \
      defined(SIMULATOR_DEVICE_METALIO_EINK4) +                                 \
-     defined(SIMULATOR_DEVICE_EEGO_A4)) > 1
+     defined(SIMULATOR_DEVICE_EEGO_A4) + defined(SIMULATOR_DEVICE_PICCO)) > 1
 #error "Select at most one simulated device"
 #endif
 
@@ -42,6 +42,12 @@
 #error "The lightless variant requires EEGO A4"
 #endif
 
+#if defined(SIMULATOR_DEVICE_PICCO) &&                                         \
+    (defined(SIMULATOR_DISPLAY_UC8179) || defined(SIMULATOR_DISPLAY_UC8279))
+#error                                                                         \
+    "Picco uses its own SSD1677/SSD2677 panel probe; do not select an Xteink controller override"
+#endif
+
 #undef FREEINK_DEVICE_X4
 #undef FREEINK_DEVICE_X3
 #undef FREEINK_DEVICE_X4PRO
@@ -50,6 +56,13 @@
 #undef FREEINK_DEVICE_PAPERMONO
 #undef FREEINK_DEVICE_METALIO_EINK4
 #undef FREEINK_DEVICE_EEGO_A4
+#undef FREEINK_DEVICE_PICCO
+
+#if defined(SIMULATOR_DEVICE_PICCO)
+#define FREEINK_DEVICE_PICCO 1
+#else
+#define FREEINK_DEVICE_PICCO 0
+#endif
 
 #if defined(SIMULATOR_DEVICE_EEGO_A4)
 #define FREEINK_DEVICE_EEGO_A4 1
@@ -65,7 +78,16 @@
 #define FREEINK_CAP_HAPTIC 0
 #endif
 
-#if defined(SIMULATOR_DEVICE_EEGO_A4)
+#if defined(SIMULATOR_DEVICE_PICCO)
+#define FREEINK_DEVICE_X4 0
+#define FREEINK_DEVICE_X3 0
+#define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
+#define FREEINK_DEVICE_STICKY 0
+#define FREEINK_DEVICE_PAPERMONO 0
+#define FREEINK_CAP_TOUCH 1
+#define FREEINK_CAP_FRONTLIGHT 1
+#elif defined(SIMULATOR_DEVICE_EEGO_A4)
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
@@ -140,7 +162,8 @@
 #endif
 
 #define FREEINK_MCU_C3 (FREEINK_DEVICE_X3 || FREEINK_DEVICE_X4)
-#define FREEINK_CAP_WARMLIGHT (FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_EEGO_A4)
+#define FREEINK_CAP_WARMLIGHT                                                  \
+  (FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_EEGO_A4 || FREEINK_DEVICE_PICCO)
 
 namespace BoardConfig {
 
@@ -154,6 +177,7 @@ enum class Board {
   PaperMono,
   MetalioEInk4,
   EegoA4,
+  Picco,
 };
 
 enum class DisplayController {
@@ -174,7 +198,8 @@ enum class TouchController : uint8_t {
   Ft5x06,
   Ft6336u,
   Gslx680,
-  Cst816s
+  Cst816s,
+  PiccoCst
 };
 
 struct TouchConfig {
@@ -196,6 +221,7 @@ struct BoardProfile {
   struct {
     int8_t up;
     int8_t down;
+    int8_t toggleSwitch = -1;
   } input;
   ViewableInsets viewableInsets = {};
   uint16_t displayWidth = 800;
@@ -274,7 +300,13 @@ inline constexpr BoardProfile EEGO_A4 = {Board::EegoA4,
                                          80,
                                          60};
 
-#if defined(SIMULATOR_DEVICE_EEGO_A4)
+inline constexpr BoardProfile PICCO = {
+    Board::Picco, "picco", DisplayController::SSD1677, 0, {21, 9, 6}, {},
+    800,          480,     {TouchController::PiccoCst}};
+
+#if defined(SIMULATOR_DEVICE_PICCO)
+inline BoardProfile ACTIVE = PICCO;
+#elif defined(SIMULATOR_DEVICE_EEGO_A4)
 inline BoardProfile ACTIVE = EEGO_A4;
 #elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
 inline BoardProfile ACTIVE = METALIO_EINK4;
@@ -325,6 +357,9 @@ inline bool selectDevice(Board board) {
   case Board::EegoA4:
     ACTIVE = EEGO_A4;
     return true;
+  case Board::Picco:
+    ACTIVE = PICCO;
+    return true;
   }
   return false;
 }
@@ -335,13 +370,14 @@ inline bool isSticky() { return ACTIVE.board == Board::Sticky; }
 inline bool isPaperMono() { return ACTIVE.board == Board::PaperMono; }
 inline bool isMetalioEInk4() { return ACTIVE.board == Board::MetalioEInk4; }
 inline bool isEegoA4() { return ACTIVE.board == Board::EegoA4; }
+inline bool isPicco() { return ACTIVE.board == Board::Picco; }
 inline bool hasTouch() {
   return isX4Pro() || isSticky() || isPaperMono() || isMetalioEInk4() ||
-         isEegoA4();
+         isEegoA4() || isPicco();
 }
 inline bool hasHomeKey() { return isX4Pro() || isMetalioEInk4() || isEegoA4(); }
 inline bool hasPwmFrontlight() { return isX4Pro() || isPaperMono(); }
-inline bool hasI2cFrontlight() { return isEegoA4(); }
+inline bool hasI2cFrontlight() { return isEegoA4() || isPicco(); }
 
 inline void holdPowerRails() {}
 

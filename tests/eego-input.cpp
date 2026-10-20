@@ -80,6 +80,7 @@ int main() {
   assert(BoardConfig::ACTIVE.input.up == 5 &&
          BoardConfig::ACTIVE.input.down == 7);
   assert(gpio.hasTouch() && gpio.hasHomeKey());
+  assert(!gpio.hasToggleSwitch() && !gpio.isToggleSwitchOn());
   assert(!gpio.isXteinkDevice() && !gpio.hasEdgeSideButtons());
   assert(BoardConfig::hasI2cFrontlight() && !BoardConfig::hasPwmFrontlight());
   auto &light = HalFrontlight::getInstance();
