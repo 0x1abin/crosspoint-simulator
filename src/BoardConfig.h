@@ -229,6 +229,7 @@ struct BoardProfile {
   TouchConfig touch = {};
   int8_t headerOffsetY = 0;
   uint8_t cornerRadius = 0;
+  uint8_t bottomCornerRadius = 0;
   int8_t tabBarOffsetY = 0;
   uint8_t tabBarHeightPct = 100;
   uint8_t tabBarWidthPct = 100;
