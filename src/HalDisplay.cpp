@@ -287,7 +287,7 @@ void composeGrayscalePreview() {
             level = kGrayWhite;
             break;
         }
-      } else if (!baseWhite) {
+      } else if (!baseWhite || (BoardConfig::isEegoA4() && msbActive)) {
         if (msbActive) {
           level = lsbActive ? kGrayDark : kGrayLight;
         } else if (lsbActive) {
@@ -361,6 +361,8 @@ HalDisplay::~HalDisplay() {}
 
 #if defined(SIMULATOR_DEVICE_READPICO)
 static constexpr const char* WINDOW_TITLE = "Simulator - Read Pico (E0470A01)";
+#elif defined(SIMULATOR_DEVICE_PICCO)
+static constexpr const char *WINDOW_TITLE = "Simulator - BOOX Picco";
 #elif defined(SIMULATOR_DEVICE_EEGO_A4)
 static constexpr const char *WINDOW_TITLE = "Simulator - EEGO A4 (UC8279C)";
 #elif defined(SIMULATOR_DEVICE_MURPHY_M4)
@@ -631,10 +633,9 @@ HalDisplay::grayscaleCapabilities(GrayscaleMode mode) const {
             false, false};
   }
   if (BoardConfig::isEegoA4()) {
-    if (mode != GrayscaleMode::Overlay)
-      return {};
-    return {GrayscaleEncoding::OverlayMasks, GrayscaleBase::Separate, false,
-            false, false};
+    if (mode == GrayscaleMode::Overlay)
+      return {GrayscaleEncoding::OverlayMasks, GrayscaleBase::Separate, false, false, false};
+    return {GrayscaleEncoding::AbsolutePlanes, GrayscaleBase::Combined, false, false, false};
   }
   if (mode == GrayscaleMode::Absolute || mode == GrayscaleMode::Direct) {
     return {GrayscaleEncoding::AbsolutePlanes,

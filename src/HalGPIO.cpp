@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,7 @@ extern GfxRenderer renderer;
 static constexpr int NUM_BUTTONS = 7;
 static constexpr SDL_Scancode SIMULATOR_SLEEP_SCANCODE = SDL_SCANCODE_S;
 static constexpr SDL_Scancode HOME_KEY_SCANCODE = SDL_SCANCODE_H;
+static constexpr SDL_Scancode SLIDE_SWITCH_SCANCODE = SDL_SCANCODE_T;
 static constexpr int TOUCH_TAP_SLOP_PX = 28;
 static constexpr int TOUCH_SWIPE_MIN_PX = 60;
 static constexpr unsigned long TOUCH_SWIPE_MAX_MS = 700;
@@ -86,6 +88,13 @@ bool homeKeyLongPressedThisFrame = false;
 bool homeKeyLongFired = false;
 bool a4ContactCancelled = false;
 unsigned long homeKeyPressedAt = 0;
+bool toggleSwitchOn = false;
+
+void setToggleSwitch(bool on) {
+  if (BoardConfig::ACTIVE.input.toggleSwitch < 0)
+    return;
+  toggleSwitchOn = on;
+}
 
 enum class SyntheticAction {
   KeyDown,
@@ -96,6 +105,8 @@ enum class SyntheticAction {
   TouchUp,
   HomeDown,
   HomeUp,
+  SwitchOn,
+  SwitchOff,
   Sleep,
   Quit
 };
@@ -304,6 +315,9 @@ void requestSimulatorSleep() {
 }
 
 bool buttonAvailable(int button) {
+  if (BoardConfig::isPicco())
+    return button == HalGPIO::BTN_CONFIRM || button == HalGPIO::BTN_POWER ||
+           button == HalGPIO::BTN_UP || button == HalGPIO::BTN_DOWN;
   if (BoardConfig::isEegoA4())
     return button == HalGPIO::BTN_POWER || button == HalGPIO::BTN_UP ||
            button == HalGPIO::BTN_DOWN;
@@ -392,7 +406,11 @@ void initializeSyntheticEvents() {
           item.substr(firstColon + 1, secondColon == std::string::npos
                                           ? std::string::npos
                                           : secondColon - firstColon - 1));
-      if (key == "QUIT") {
+      if (key == "SWITCH_ON" || key == "SWITCH_OFF") {
+        syntheticEvents.push_back({atMs, key == "SWITCH_ON"
+                                             ? SyntheticAction::SwitchOn
+                                             : SyntheticAction::SwitchOff});
+      } else if (key == "QUIT") {
         syntheticEvents.push_back({atMs, SyntheticAction::Quit});
       } else if (key == "S" || key == "SLEEP") {
         syntheticEvents.push_back({atMs, SyntheticAction::Sleep});
@@ -502,6 +520,12 @@ void processSyntheticEvents() {
     case SyntheticAction::HomeUp:
       endHomeKey();
       break;
+    case SyntheticAction::SwitchOn:
+      setToggleSwitch(true);
+      break;
+    case SyntheticAction::SwitchOff:
+      setToggleSwitch(false);
+      break;
     case SyntheticAction::Sleep:
       requestSimulatorSleep();
       break;
@@ -543,6 +567,9 @@ void HalGPIO::begin() {
 #if defined(SIMULATOR_DEVICE_READPICO)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::ReadPico);
+#elif defined(SIMULATOR_DEVICE_PICCO)
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::Picco);
 #elif defined(SIMULATOR_DEVICE_EEGO_A4)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::EegoA4);
@@ -580,6 +607,9 @@ void HalGPIO::begin() {
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::XteinkX4);
 #endif
+  const char *position = std::getenv("CROSSPOINT_SIM_SLIDE_SWITCH");
+  toggleSwitchOn = false;
+  setToggleSwitch(position && std::strcmp(position, "on") == 0);
 }
 
 bool HalGPIO::isXteinkDevice() const {
@@ -633,6 +663,10 @@ void HalGPIO::update() {
     if (e.type == SDL_QUIT) {
       quitRequested.store(true);
     } else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
+      if (e.key.keysym.scancode == SLIDE_SWITCH_SCANCODE) {
+        setToggleSwitch(!toggleSwitchOn);
+        continue;
+      }
       if (e.key.keysym.scancode == SDL_SCANCODE_PAGEUP ||
           e.key.keysym.scancode == SDL_SCANCODE_PAGEDOWN) {
         beginCoverButton(
@@ -789,6 +823,14 @@ bool HalGPIO::hasTouch() const { return BoardConfig::hasTouch(); }
 
 bool HalGPIO::hasHomeKey() const { return BoardConfig::hasHomeKey(); }
 
+bool HalGPIO::hasToggleSwitch() const {
+  return BoardConfig::ACTIVE.input.toggleSwitch >= 0;
+}
+
+bool HalGPIO::isToggleSwitchOn() const {
+  return hasToggleSwitch() && toggleSwitchOn;
+}
+
 bool HalGPIO::wasHomeKeyPressed() const { return homeKeyPressedThisFrame; }
 
 bool HalGPIO::wasHomeKeyTapped() const { return homeKeyTappedThisFrame; }
@@ -913,6 +955,12 @@ void HalGPIO::startDeepSleep() {
       if (e.type == SDL_QUIT) {
         quitRequested.store(true);
         return;
+      }
+
+      if (e.type == SDL_KEYDOWN && !e.key.repeat &&
+          e.key.keysym.scancode == SLIDE_SWITCH_SCANCODE) {
+        setToggleSwitch(!toggleSwitchOn);
+        continue;
       }
 
       if (e.type == SDL_KEYDOWN && !e.key.repeat) {

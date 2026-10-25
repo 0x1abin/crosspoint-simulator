@@ -231,7 +231,7 @@ inline bool fetchFromMockRoot(const std::string &url, Response &out) {
 inline bool fetchWithCurl(const std::string &url, const char *method,
                           const std::map<std::string, std::string> &headers,
                           const std::string &basicAuth, const char *body,
-                          Response &out, int timeoutMs) {
+                          Response &out, int timeoutMs, bool followRedirects) {
   char bodyTemplate[] = "/tmp/crosspoint-sim-http-body-XXXXXX";
   int bodyFd = mkstemp(bodyTemplate);
   if (bodyFd < 0)
@@ -248,7 +248,9 @@ inline bool fetchWithCurl(const std::string &url, const char *method,
 
   const int timeoutSeconds = timeoutMs > 0 ? std::max(1, (timeoutMs + 999) / 1000) : 60;
   const int connectTimeoutSeconds = std::min(10, timeoutSeconds);
-  std::string cmd = "curl -L -sS --connect-timeout ";
+  std::string cmd = "curl -sS ";
+  if (followRedirects) cmd += "-L ";
+  cmd += "--connect-timeout ";
   cmd += std::to_string(connectTimeoutSeconds);
   cmd += " --max-time ";
   cmd += std::to_string(timeoutSeconds);
@@ -306,13 +308,13 @@ inline bool fetchWithCurl(const std::string &url, const char *method,
 inline bool fetch(const std::string &url, const char *method,
                   const std::map<std::string, std::string> &headers,
                   const std::string &basicAuth, const char *body, Response &out,
-                  int timeoutMs = 60000) {
+                  int timeoutMs = 60000, bool followRedirects = true) {
   out = Response{};
   if (fetchFromMockRoot(url, out))
     return true;
   if (fetchFromFileUrl(url, out))
     return true;
-  return fetchWithCurl(url, method, headers, basicAuth, body, out, timeoutMs);
+  return fetchWithCurl(url, method, headers, basicAuth, body, out, timeoutMs, followRedirects);
 }
 
 } // namespace sim_http_fetch

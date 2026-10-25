@@ -38,6 +38,8 @@ struct SimBinarySemaphore : SimSemaphoreBase {
 };
 
 typedef SimSemaphoreBase *SemaphoreHandle_t;
+// The static API currently used by firmware is xSemaphoreCreateMutexStatic.
+using StaticSemaphore_t = SimMutex;
 
 namespace sim_semaphore_detail {
 
@@ -62,6 +64,11 @@ inline std::chrono::milliseconds ticksToDuration(uint32_t ticks) {
 } // namespace sim_semaphore_detail
 
 inline SemaphoreHandle_t xSemaphoreCreateMutex() { return new SimMutex(); }
+
+inline SemaphoreHandle_t
+xSemaphoreCreateMutexStatic(StaticSemaphore_t *storage) {
+  return storage;
+}
 
 inline SemaphoreHandle_t xSemaphoreCreateBinary() {
   return new SimBinarySemaphore();

@@ -10,14 +10,21 @@ The original reference was the FreeInk SDK revision pinned by CrossPoint develop
 `56c677f680f836172033bd5c9cda8bac8b992b72`:
 [`aef1a6c89e36f331b2e1aacbbf7ce0debdeb732a`](https://github.com/Free-Ink/freeink-sdk/tree/aef1a6c89e36f331b2e1aacbbf7ce0debdeb732a).
 
-The current CrossMux rehearsal reviews SDK
+The previous CrossMux rehearsal reviewed SDK
 `7fcd3b34c108f28c086ade3b433924022dbc0998`, Reader
 `ba39565ce7b3a8aab14ca86da4fa4c3ca140f007` and Simulator
-`1915ee0a15564c3f49d74fa2334f773f282c5364`. Current source contracts come from
+`1915ee0a15564c3f49d74fa2334f773f282c5364`. That rehearsal's source contracts came from
 the [reviewed board profile](https://github.com/Free-Ink/freeink-sdk/blob/7fcd3b34c108f28c086ade3b433924022dbc0998/libs/hardware/BoardConfig/include/BoardConfig.h)
 and [support notes](https://github.com/Free-Ink/freeink-sdk/blob/7fcd3b34c108f28c086ade3b433924022dbc0998/docs/metalio-eink4-support.md).
 The links below and the fixture-based QA section retain the original port's
 provenance; they are not acceptance results for this rehearsal.
+
+The current local rehearsal reviews SDK upstream
+`28edea3a768f9fd2dd45300ff9fca02ae7735b36` plus fork changes (exported source
+tree `f32d5ecaec2c309f02a4022fcede67a03b24ede8`), Reader
+`98da17829cb3c8afbc50af491c81d440bbfd15b9` and Simulator upstream
+`a4397d28fad79066d598c16f7ab9c13d341710cc`. The earlier links and QA outcomes
+remain historical evidence; they do not establish acceptance of this candidate.
 
 - [Board profile, lines 1598–1618](https://github.com/Free-Ink/freeink-sdk/blob/aef1a6c89e36f331b2e1aacbbf7ce0debdeb732a/libs/hardware/BoardConfig/include/BoardConfig.h#L1598-L1618)
 - [CST816S cover-key handling](https://github.com/Free-Ink/freeink-sdk/blob/aef1a6c89e36f331b2e1aacbbf7ce0debdeb732a/libs/hardware/InputManager/src/InputManager.cpp#L1566-L1591)

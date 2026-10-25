@@ -22,7 +22,7 @@ void HalClock::begin() {
 #if defined(SIMULATOR_DEVICE_READPICO) || defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO) ||        \
     defined(SIMULATOR_DEVICE_X4_CLASSIC) || defined(SIMULATOR_DEVICE_EEGO_A4) ||                                     \
     defined(SIMULATOR_DEVICE_MURPHY_M4) || defined(SIMULATOR_DEVICE_MOFEI_M4) || defined(SIMULATOR_DEVICE_STICKY) || \
-    defined(SIMULATOR_DEVICE_PAPERMONO) || defined(SIMULATOR_DEVICE_METALIO_EINK4)
+    defined(SIMULATOR_DEVICE_PAPERMONO) || defined(SIMULATOR_DEVICE_METALIO_EINK4) || defined(SIMULATOR_DEVICE_PICCO)
   _available = true;
 #else
   _available = false;

@@ -11,6 +11,7 @@
 #include <HalSystem.h>
 #include <IPAddress.h>
 #include <esp_http_client.h>
+#include <esp_ota_ops.h>
 #include <mbedtls/sha256.h>
 #include <nvs.h>
 
@@ -201,6 +202,8 @@ void testSystemInfo() {
 } // namespace
 
 int main() {
+  assert(esp_ota_get_running_partition() == nullptr);
+  assert(esp_ota_get_next_update_partition(nullptr) == nullptr);
   assert(ESP.getFreePsram() == heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
   assert(ESP.getMaxAllocPsram() == heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
 

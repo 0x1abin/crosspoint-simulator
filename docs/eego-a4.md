@@ -5,7 +5,7 @@ This profile follows CrossPoint's `eego_a4` environment added in
 and initially used SDK `425d200a8ea447326b4b9696e4e47dc84ad9d7f6`, pinned by
 CrossPoint develop `43694c9018d26446ab30cce2fa65ee608355ae50`.
 
-The current CrossMux rehearsal reviews SDK
+The previous CrossMux rehearsal reviewed SDK
 `7fcd3b34c108f28c086ade3b433924022dbc0998`, Reader
 `ba39565ce7b3a8aab14ca86da4fa4c3ca140f007` and Simulator
 `1915ee0a15564c3f49d74fa2334f773f282c5364`, preserving the fork's clock and
@@ -17,6 +17,13 @@ The source of truth is the SDK's
 and [hardware notes](https://github.com/Free-Ink/freeink-sdk/blob/7fcd3b34c108f28c086ade3b433924022dbc0998/docs/eego-a4-support.md).
 The SDK documents incomplete physical hardware validation. This host profile
 does not validate those provisional pin assignments or controller waveforms.
+
+The current local rehearsal reviews SDK upstream
+`28edea3a768f9fd2dd45300ff9fca02ae7735b36` plus fork changes (exported source
+tree `f32d5ecaec2c309f02a4022fcede67a03b24ede8`), Reader
+`98da17829cb3c8afbc50af491c81d440bbfd15b9` and Simulator upstream
+`a4397d28fad79066d598c16f7ab9c13d341710cc`. The earlier links and QA outcomes
+remain historical evidence; they do not establish acceptance of this candidate.
 
 ## Profile Contract
 

@@ -75,11 +75,16 @@ int main() {
   assert(BoardConfig::ACTIVE.displayWidth == HalDisplay::DISPLAY_WIDTH);
   assert(BoardConfig::ACTIVE.displayHeight == HalDisplay::DISPLAY_HEIGHT);
   const auto insets = BoardConfig::ACTIVE.viewableInsets;
-  assert(insets.top == 24 && insets.right == 24 && insets.bottom == 8 &&
-         insets.left == 24);
+  assert(insets.top == 24 && insets.right == 8 && insets.bottom == 16 &&
+         insets.left == 8);
+  assert(BoardConfig::ACTIVE.grayscaleLevels == 4);
+  assert(BoardConfig::ACTIVE.headerOffsetY == 6 && BoardConfig::ACTIVE.cornerRadius == 24);
+  assert(BoardConfig::ACTIVE.tabBarOffsetY == 18 && BoardConfig::ACTIVE.tabBarHeightPct == 80 &&
+         BoardConfig::ACTIVE.tabBarWidthPct == 80 && BoardConfig::ACTIVE.wifiMaxTxPower == 60);
   assert(BoardConfig::ACTIVE.input.up == 5 &&
          BoardConfig::ACTIVE.input.down == 7);
   assert(gpio.hasTouch() && gpio.hasHomeKey());
+  assert(!gpio.hasToggleSwitch() && !gpio.isToggleSwitchOn());
   assert(!gpio.isXteinkDevice() && !gpio.hasEdgeSideButtons());
   assert(BoardConfig::hasI2cFrontlight() && !BoardConfig::hasPwmFrontlight());
   auto &light = HalFrontlight::getInstance();
