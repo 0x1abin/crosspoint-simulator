@@ -1,4 +1,5 @@
 #include "SimulatorLifecycle.h"
+#include "HalGPIO.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -52,6 +53,10 @@ WakeReason consumeWakeReason() {
   }
 
   setenv(kWakeReasonEnv, "power", 1);
+  // Retain the physical switch level when the host relaunches after sleep.
+  if (gpio.hasToggleSwitch())
+    setenv("CROSSPOINT_SIM_SLIDE_SWITCH",
+           gpio.isToggleSwitchOn() ? "on" : "off", 1);
   // A deep-sleep wake is a fresh process. Do not replay the pre-sleep script,
   // which would otherwise put every relaunched process back to sleep forever.
   // Tests can provide an explicit post-wake schedule when they need to capture

@@ -63,6 +63,7 @@ static void mouse(int type, int x, int y) {
 static bool near(float a, float b) { return std::abs(a - b) < 0.003f; }
 
 int main() {
+  assert(!gpio.hasToggleSwitch() && !gpio.isToggleSwitchOn());
   assert(SDL_Init(SDL_INIT_EVENTS | SDL_INIT_TIMER) == 0);
   setenv("CROSSPOINT_SIM_INPUT_SCRIPT",
          "20:BACK;120:LEFT;220:RIGHT;320:ENTER;440:UP;560:DOWN;"

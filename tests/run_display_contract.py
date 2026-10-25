@@ -11,10 +11,13 @@ with tempfile.TemporaryDirectory(prefix='sim-display-contract-') as temporary:
 #include <cassert>
 GfxRenderer renderer;ESPMock ESP;
 int main(){
- if(BoardConfig::isReadPico()||BoardConfig::isEegoA4()) {
+ if(BoardConfig::isReadPico()) {
   assert(display.grayscaleCapabilities().supported());
   assert(!display.grayscaleCapabilities(HalDisplay::GrayscaleMode::Absolute).supported());
   assert(!display.grayscaleCapabilities(HalDisplay::GrayscaleMode::Direct).supported());
+ }else if(BoardConfig::isEegoA4()){
+  assert(display.grayscaleCapabilities(HalDisplay::GrayscaleMode::Absolute).base == HalDisplay::GrayscaleBase::Combined);
+  assert(display.grayscaleCapabilities(HalDisplay::GrayscaleMode::Direct).base == HalDisplay::GrayscaleBase::Combined);
  }else{
   BoardConfig::ACTIVE.displayController=HalDisplay::Controller::UC8279;
   BoardConfig::ACTIVE.displayControllerVariant=0x67;
@@ -39,3 +42,12 @@ int main(){
         if profile!='DEFAULT':command.append('-D'+profile)
         subprocess.run(command,check=True);subprocess.run([str(binary)],check=True)
 print('Real display capabilities, deferred base, commit, cancellation, B/W fallback and unsupported UC8279 passed')
+
+# Include the real implementation in the EEGO fixture to inspect its composed pixels without a new public HAL API.
+with tempfile.TemporaryDirectory(prefix='sim-eego-display-') as temporary:
+    binary=Path(temporary)/'eego'
+    command=['c++','-std=c++20','-DSIMULATOR','-DCROSSPOINT_EMULATED=1','-DSIMULATOR_DEVICE_EEGO_A4',
+             '-I'+str(R/'tests/display_stubs'),'-I'+str(R/'src'),'-I'+str(PROJECT/'lib/Memory'),
+             str(R/'tests/eego_display_self_test.cpp'),str(R/'src/HalGPIO.cpp'),str(R/'src/SimulatorLifecycle.cpp'),
+             *shlex.split(subprocess.check_output(['sdl2-config','--cflags','--libs'],text=True)),'-pthread','-o',str(binary)]
+    subprocess.run(command,check=True);subprocess.run([str(binary)],check=True)

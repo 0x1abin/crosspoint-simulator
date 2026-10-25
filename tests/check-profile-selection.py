@@ -6,6 +6,9 @@ import tempfile
 root = Path(__file__).resolve().parents[1]
 profiles = [
     ([], "xteink_x4", 0, 0, 0),
+    (["SIMULATOR_DEVICE_READPICO"], "read_pico", 1, 0, 0),
+    (["SIMULATOR_DEVICE_MURPHY_M4"], "murphy_m4", 1, 0, 1),
+    (["SIMULATOR_DEVICE_MOFEI_M4"], "mofei_m4", 1, 0, 1),
     (["SIMULATOR_DEVICE_X3"], "xteink_x3", 0, 0, 0),
     (["SIMULATOR_DEVICE_X4_PRO"], "xteink_x4_pro", 1, 1, 1),
     (["SIMULATOR_DEVICE_X4_CLASSIC"], "xteink_x4_classic", 0, 0, 0),
@@ -13,6 +16,7 @@ profiles = [
     (["SIMULATOR_DEVICE_PAPERMONO"], "m5stack_paper_mono", 1, 0, 1),
     (["SIMULATOR_DEVICE_METALIO_EINK4"], "metalio_eink4", 1, 1, 0),
     (["SIMULATOR_DEVICE_EEGO_A4"], "eego_a4", 1, 1, 1),
+    (["SIMULATOR_DEVICE_PICCO"], "picco", 1, 0, 1),
 ]
 with tempfile.TemporaryDirectory(prefix="simulator-profiles-") as directory:
     folder = Path(directory)
@@ -26,11 +30,19 @@ int main(int, char **argv) {
   assert(BoardConfig::hasTouch() == bool(std::atoi(argv[2])));
   assert(BoardConfig::hasHomeKey() == bool(std::atoi(argv[3])));
   assert((BoardConfig::hasPwmFrontlight() || BoardConfig::hasI2cFrontlight()) == bool(std::atoi(argv[4])));
+  assert(BoardConfig::EEGO_A4.grayscaleLevels == 4);
+  assert(BoardConfig::EEGO_A4.headerOffsetY == 6 && BoardConfig::EEGO_A4.cornerRadius == 24);
+  assert(BoardConfig::EEGO_A4.tabBarOffsetY == 18);
+  assert(BoardConfig::EEGO_A4.tabBarHeightPct == 80 && BoardConfig::EEGO_A4.tabBarWidthPct == 80);
+  assert(BoardConfig::EEGO_A4.wifiMaxTxPower == 60);
+  assert(BoardConfig::EEGO_A4.statusBarOffsetY == 6 && BoardConfig::EEGO_A4.bottomCornerRadius == 40);
+  assert(BoardConfig::XTEINK_X4.statusBarOffsetY == 0 && BoardConfig::XTEINK_X4.bottomCornerRadius == 0);
   assert(FREEINK_CAP_TOUCH == int(BoardConfig::hasTouch()));
   assert(FREEINK_CAP_FRONTLIGHT == int(BoardConfig::hasPwmFrontlight() || BoardConfig::hasI2cFrontlight()));
   assert(FREEINK_DEVICE_X4 + FREEINK_DEVICE_X3 + FREEINK_DEVICE_X4PRO +
          FREEINK_DEVICE_X4CLASSIC + FREEINK_DEVICE_STICKY +
-         FREEINK_DEVICE_PAPERMONO + FREEINK_DEVICE_METALIO_EINK4 + FREEINK_DEVICE_EEGO_A4 == 1);
+         FREEINK_DEVICE_PAPERMONO + FREEINK_DEVICE_METALIO_EINK4 + FREEINK_DEVICE_EEGO_A4 + FREEINK_DEVICE_PICCO +
+         FREEINK_DEVICE_READPICO + FREEINK_DEVICE_MURPHY_M4 == 1);
 }
 ''')
     command = ["c++", "-std=c++20", f"-I{root / 'src'}", "-DFREEINK_DEVICE_X4=1", str(source)]
@@ -49,6 +61,10 @@ int main(int, char **argv) {
     negatives += [(["SIMULATOR_DEVICE_EEGO_A4", flag], "uses UC8279C")
                   for flag in ["SIMULATOR_DISPLAY_UC8179", "SIMULATOR_DISPLAY_UC8279"]]
     negatives += [(["SIMULATOR_EEGO_NO_FRONTLIGHT"], "requires EEGO A4")]
+    negatives += [(["SIMULATOR_DEVICE_PICCO"] + flags, "at most one simulated device")
+                  for flags, *_ in profiles if flags and "SIMULATOR_DEVICE_PICCO" not in flags]
+    negatives += [(["SIMULATOR_DEVICE_PICCO", flag], "Picco uses its own")
+                  for flag in ["SIMULATOR_DISPLAY_UC8179", "SIMULATOR_DISPLAY_UC8279"]]
     for flags, diagnostic in negatives:
         result = subprocess.run(command + [f"-D{flag}" for flag in flags] + ["-fsyntax-only"], capture_output=True, text=True)
         assert result.returncode != 0 and diagnostic in result.stderr, (flags, result.stderr)

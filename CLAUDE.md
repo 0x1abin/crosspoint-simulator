@@ -68,7 +68,8 @@ The simulator is a collection of host-side reimplementations of the firmware's h
 `SIMULATOR_DEVICE_STICKY` for Seeed Sticky, or
 `SIMULATOR_DEVICE_PAPERMONO` for M5Stack PaperMono, or
 `SIMULATOR_DEVICE_METALIO_EINK4` for Metalio E-Ink 4, or
-`SIMULATOR_DEVICE_EEGO_A4` for EEGO A4. The fork also retains
+`SIMULATOR_DEVICE_EEGO_A4` for EEGO A4, or `SIMULATOR_DEVICE_PICCO` for Picco.
+The fork also retains
 `SIMULATOR_DEVICE_READPICO` for Read Pico and `SIMULATOR_DEVICE_MURPHY_M4`
 (legacy `SIMULATOR_DEVICE_MOFEI_M4`) for Murphy M4.
 `SIMULATOR_DISPLAY_UC8179` and `SIMULATOR_DISPLAY_UC8279` select per-batch
@@ -100,6 +101,15 @@ sync state must not change the operating system clock. OS-backed random bytes
 and validated persistent NVS blobs remain part of the fork compatibility contract.
 
 `HalGPIO::update` owns the SDL event pump for the whole simulator, do not poll SDL events elsewhere. Scancodes map to button indices `BTN_BACK=0` through `BTN_POWER=6`. `SDL_QUIT` sets the `quitRequested` atomic that `HalDisplay::shouldQuit()` reads.
+
+Picco uses 800x480, Tma525c touch, RTC/tilt availability and I2C warm/cool
+frontlight state. There is no Home key. T toggles its slide switch; scripted
+`SWITCH_ON`/`SWITCH_OFF` and `CROSSPOINT_SIM_SLIDE_SWITCH=on` set its level.
+The level survives sleep/relaunch. Firmware applies the selected binding;
+the host must not change the binding/settings itself. The charger hold remains
+unmodeled. See [docs/picco.md](docs/picco.md) for provisional input and hardware
+limits. Keep the touch-controller identity aligned with the reviewed SDK's
+`Tma525c` name; earlier simulator references used `PiccoCst`.
 
 For repeatable QA, `CROSSPOINT_SIM_INPUT_SCRIPT` schedules synthetic key and
 touch-device edges through the same `HalGPIO` state as real SDL input, and

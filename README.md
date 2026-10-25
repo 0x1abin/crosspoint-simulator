@@ -88,13 +88,17 @@ these flags:
   Up/Down and P are its only physical buttons; H models the touch controller's
   screen-key events. Add `-DSIMULATOR_EEGO_NO_FRONTLIGHT` for a lightless unit.
   See [the profile contract and verification](docs/eego-a4.md).
+- `-DSIMULATOR_DEVICE_PICCO` selects the BOOX Picco's 800x480 profile with
+  Tma525c touch, RTC, tilt availability and warm/cool I2C frontlight state.
+  T models the slide switch; Up/Down/P and the SDK's provisional Confirm input
+  are available. There is no Home key. See [the profile contract and limits](docs/picco.md).
 - `-DSIMULATOR_DISPLAY_UC8179` selects the newer UC8179 controller used by
   some X4 and X4 Pro production batches.
 - `-DSIMULATOR_DISPLAY_UC8279` selects UC8279d on X3, or the 800x480 UC8279
   controller on X4-family profiles.
 
 The sample PlatformIO files include ready-to-use environments for the original
-profiles plus `simulator_eego_a4`, `simulator_eego_a4_no_frontlight`,
+profiles plus `simulator_eego_a4`, `simulator_eego_a4_no_frontlight`, `simulator_picco`,
 `simulator_metalio_eink4`, `simulator_murphy_m4`,
 `simulator_mofei_m4`, `simulator_sticky`, `simulator_papermono`,
 `simulator_x3_uc8279`, `simulator_x4_uc8179`, `simulator_x4_uc8279`,
@@ -109,7 +113,7 @@ selected `BoardConfig::DisplayController` and identifies it in the window title;
 it does not attempt to model controller timing, LUT waveforms, ghosting, or
 power sequencing.
 
-By default, the simulator keeps its own `JPEGDEC`, `PNGdec`, and QRCode compatibility shims so existing firmware projects can update this library without changing their simulator environment. To test against the native decoder libraries instead, follow the opt-in comments in the sample PlatformIO files: define `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, set `lib_compat_mode = off`, change simulator `lib_ignore` to `hal, WebSockets`, and add the native `PNGdec`/`JPEGDEC` dependencies. `WebSockets` is ignored only in native simulator builds because this repo supplies the host-backed `WebSocketsServer` implementation.
+By default, the simulator keeps its own `JPEGDEC`, `PNGdec`, and QRCode compatibility shims so existing firmware projects can update this library without changing their simulator environment. To test against the native decoder libraries instead, follow the opt-in comments in the sample PlatformIO files: define `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, set `lib_compat_mode = off`, change simulator `lib_ignore` to `hal, WebSockets, SecureNet`, and add the native `PNGdec`/`JPEGDEC` dependencies. `WebSockets` is ignored only in native simulator builds because this repo supplies the host-backed `WebSocketsServer` implementation. `SecureNet` is ignored because the simulator supplies the host HTTP/TLS shims.
 
 If you only want a self-contained simulator dependency, stop there.
 
@@ -183,6 +187,7 @@ tests/run_host_compat_self_test.sh
 | P      | Power                              |
 | S      | Simulate sleep                     |
 | H      | X4 Pro / EEGO A4 / Metalio Home key |
+| T      | Picco slide switch on/off         |
 | Mouse  | Touch-device tap, drag, and swipe  |
 
 When the simulator is on the sleep screen, EEGO A4, M4 and Read Pico accept only Power as a
@@ -203,6 +208,8 @@ tests possible without desktop-control permissions:
   held for 80 ms unless a duration is provided. Metalio also accepts `PREV`
   and `NEXT` for its capacitive cover page keys; `UP`/`DOWN` remain physical
   volume keys.
+- Picco accepts `SWITCH_ON` and `SWITCH_OFF` to set the slide-switch position.
+  `CROSSPOINT_SIM_SLIDE_SWITCH=on` selects its initial position (default off).
 - Touch-device actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
   `SWIPE:<x1>,<y1>,<x2>,<y2>[,<duration-milliseconds>]`. Coordinates are in
   displayed logical pixels, so they match UI layouts and screenshots after the
