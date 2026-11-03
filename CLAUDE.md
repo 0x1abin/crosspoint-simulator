@@ -45,10 +45,9 @@ The simulator is a collection of host-side reimplementations of the firmware's h
 
 - MD5: [src/MD5Builder.h](src/MD5Builder.h) is a thin dispatcher that auto-selects the implementation via `#ifdef __APPLE__` / `#elif __linux__`. [src/MD5Builder_mac.h](src/MD5Builder_mac.h) uses CommonCrypto; [src/MD5Builder_linux.h](src/MD5Builder_linux.h) uses OpenSSL. No downstream swapping is needed - just include `MD5Builder.h`.
 - Web server shims: [src/WebServer.cpp](src/WebServer.cpp), [src/WebSocketsServer.cpp](src/WebSocketsServer.cpp), and [src/NetworkClient.cpp](src/NetworkClient.cpp) expose firmware port 80 as `http://127.0.0.1:8080/` and port 81 WebSockets as `ws://127.0.0.1:8081/`. `CROSSPOINT_SIM_HTTP_PORT` moves the pair together when either port is occupied. Current CrossPoint builds compile their firmware-owned `CrossPointWebServer.cpp` and `WebDAVHandler.cpp` against these shims; `CROSSPOINT_SIMULATOR_PROJECT_WEBSERVER` disables only the legacy reduced substitute in this library.
-- Request arguments belong to the HTTP worker. `releaseRequestArguments()`
-  called from the application loop must leave an in-flight handler untouched;
-  the worker releases parsed arguments after the request, and `stop()` joins
-  the worker before releasing any remaining protected argument arrays.
+- HTTP handlers and request arguments belong to the thread calling `handleClient()`.
+  The worker reads and queues requests; `releaseRequestArguments()` runs on the
+  application thread. `stop()` joins the worker and closes queued connections.
 - Build flags: macOS gets architecture-correct SDL compiler and linker flags
   from `sdl2-config`, so the same sample works on Intel and Apple Silicon.
   Linux/WSL additionally links OpenSSL with

@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <future>
 #include <string>
 #include <thread>
 
@@ -99,31 +100,33 @@ int main() {
     assert(server.argumentsEmpty() && server.args() == 0);
     server.send(200, "text/plain", value + body);
   });
-  std::atomic<bool> entered{false}, resume{false}, stopped{false};
+  const auto appThread = std::this_thread::get_id();
   server.on("/hold", HTTP_GET, [&] {
-    assert(server.arg("q") == "held");
-    entered = true;
-    waitFor(resume);
+    assert(std::this_thread::get_id() == appThread);
     assert(server.arg("q") == "held");
     server.send(200, "text/plain", "held");
   });
+  const auto pumpRequest = [&](uint16_t p, const char* text) {
+    auto response = std::async(std::launch::async, [&] { return request(p, text); });
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (response.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+      assert(std::chrono::steady_clock::now() < deadline);
+      server.handleClient();
+    }
+    server.releaseRequestArguments();
+    assert(server.argumentsEmpty());
+    return response.get();
+  };
   server.begin();
-  assert(request(port, "POST /args?q=one HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}").ends_with("one{}"));
-  assert(request(port, "GET /args?q=two HTTP/1.1\r\n\r\n").ends_with("two"));
-  assert(request(port, "POST /args?q=bad HTTP/1.1\r\nContent-Length: 8\r\n\r\nx").find("400 Bad Request") != std::string::npos);
-  assert(request(port, "GET /args?q=after HTTP/1.1\r\n\r\n").ends_with("after"));
-  std::string heldResponse;
-  std::thread caller([&] { heldResponse = request(port, "GET /hold?q=held HTTP/1.1\r\n\r\n"); });
-  waitFor(entered);
-  server.releaseRequestArguments();
-  std::thread stopper([&] { server.stop(); stopped = true; });
-  assert(!stopped);
-  resume = true;
-  caller.join();
-  stopper.join();
-  assert(heldResponse.ends_with("held") && stopped && server.argumentsEmpty());
+  assert(pumpRequest(port, "POST /args?q=one HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}").ends_with("one{}"));
+  assert(pumpRequest(port, "GET /args?q=two HTTP/1.1\r\n\r\n").ends_with("two"));
+  assert(pumpRequest(port, "POST /args?q=bad HTTP/1.1\r\nContent-Length: 8\r\n\r\nx").find("400 Bad Request") != std::string::npos);
+  assert(pumpRequest(port, "GET /args?q=after HTTP/1.1\r\n\r\n").ends_with("after"));
+  assert(pumpRequest(port, "GET /hold?q=held HTTP/1.1\r\n\r\n").ends_with("held"));
+  server.stop();
+  assert(server.argumentsEmpty());
   server.begin();
-  assert(request(port, "GET /args?q=restarted HTTP/1.1\r\n\r\n").ends_with("restarted"));
+  assert(pumpRequest(port, "GET /args?q=restarted HTTP/1.1\r\n\r\n").ends_with("restarted"));
   server.stop();
   assert(server.argumentsEmpty());
 }

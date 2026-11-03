@@ -18,6 +18,14 @@
 
 namespace sim_http_fetch {
 
+// Firmware HTTP timeouts. On the device each one limits a single wait (to
+// connect, or for the next data), not the whole transfer. 5 s is the
+// Arduino HTTPClient and ESP-IDF default.
+struct Timeouts {
+  unsigned long connectMs = 5000;
+  unsigned long readMs = 5000;
+};
+
 struct Response {
   int statusCode = 0;
   int curlExitCode = 0;
@@ -231,7 +239,7 @@ inline bool fetchFromMockRoot(const std::string &url, Response &out) {
 inline bool fetchWithCurl(const std::string &url, const char *method,
                           const std::map<std::string, std::string> &headers,
                           const std::string &basicAuth, const char *body,
-                          Response &out, int timeoutMs, bool followRedirects) {
+                          Response &out, bool followRedirects, const Timeouts& timeouts) {
   char bodyTemplate[] = "/tmp/crosspoint-sim-http-body-XXXXXX";
   int bodyFd = mkstemp(bodyTemplate);
   if (bodyFd < 0)
@@ -246,22 +254,27 @@ inline bool fetchWithCurl(const std::string &url, const char *method,
   }
   close(headerFd);
 
-  const int timeoutSeconds = timeoutMs > 0 ? std::max(1, (timeoutMs + 999) / 1000) : 60;
-  const int connectTimeoutSeconds = std::min(10, timeoutSeconds);
+  // curl has no read timeout; "under 1 byte/s for N seconds" is the closest.
+  const unsigned long readSeconds = timeouts.readMs < 1000 ? 1 : (timeouts.readMs + 999) / 1000;
+  char limits[96];
+  snprintf(limits, sizeof(limits), "--connect-timeout %.3f --speed-limit 1 --speed-time %lu ",
+           timeouts.connectMs / 1000.0, readSeconds);
   std::string cmd = "curl -sS ";
+  cmd += limits;
   if (followRedirects) cmd += "-L ";
-  cmd += "--connect-timeout ";
-  cmd += std::to_string(connectTimeoutSeconds);
-  cmd += " --max-time ";
-  cmd += std::to_string(timeoutSeconds);
   cmd += " -D ";
   cmd += shellQuote(headerTemplate);
   cmd += " -o ";
   cmd += shellQuote(bodyTemplate);
   cmd += " -w '%{http_code}'";
-  if (method && std::string(method) != "GET")
-    cmd += " -X " + shellQuote(method);
-  for (const auto &header : headers) {
+  const std::string verb = method ? method : "GET";
+  // -X HEAD would make curl wait for the body the headers announce.
+  if (verb == "HEAD") {
+    cmd += " --head";
+  } else if (verb != "GET") {
+    cmd += " -X " + shellQuote(verb);
+  }
+  for (const auto& header : headers) {
     cmd += " -H " + shellQuote(header.first + ": " + header.second);
   }
   if (!basicAuth.empty())
@@ -288,7 +301,7 @@ inline bool fetchWithCurl(const std::string &url, const char *method,
 
   bool readOk = readFile(bodyTemplate, out.body);
   unlink(bodyTemplate);
-  if (!readOk)
+  if (!readOk || verb == "HEAD")
     out.body.clear();
 
   std::string rawHeaders;
@@ -305,16 +318,13 @@ inline bool fetchWithCurl(const std::string &url, const char *method,
   return rc == 0 || out.statusCode > 0 || !out.body.empty();
 }
 
-inline bool fetch(const std::string &url, const char *method,
-                  const std::map<std::string, std::string> &headers,
-                  const std::string &basicAuth, const char *body, Response &out,
-                  int timeoutMs = 60000, bool followRedirects = true) {
+inline bool fetch(const std::string& url, const char* method, const std::map<std::string, std::string>& headers,
+                  const std::string& basicAuth, const char* body, Response& out, bool followRedirects = true,
+                  const Timeouts& timeouts = {}) {
   out = Response{};
-  if (fetchFromMockRoot(url, out))
-    return true;
-  if (fetchFromFileUrl(url, out))
-    return true;
-  return fetchWithCurl(url, method, headers, basicAuth, body, out, timeoutMs, followRedirects);
+  if (fetchFromMockRoot(url, out)) return true;
+  if (fetchFromFileUrl(url, out)) return true;
+  return fetchWithCurl(url, method, headers, basicAuth, body, out, followRedirects, timeouts);
 }
 
 } // namespace sim_http_fetch

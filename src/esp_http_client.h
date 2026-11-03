@@ -108,6 +108,14 @@ inline const char *methodName(esp_http_client_method_t method) {
   }
 }
 
+// ESP-IDF uses timeout_ms for both connecting and each read; 0 means 5 s.
+inline sim_http_fetch::Timeouts timeouts(const esp_http_client_config_t &config) {
+  sim_http_fetch::Timeouts out;
+  if (config.timeout_ms > 0)
+    out.connectMs = out.readMs = static_cast<unsigned long>(config.timeout_ms);
+  return out;
+}
+
 inline bool hasToken(const std::string &value, const char *token) {
   size_t start = 0;
   while (start < value.size()) {
@@ -186,7 +194,7 @@ inline bool transfer(esp_http_client_handle_t handle, bool emitBody) {
           handle->url, methodName(handle->config.method), handle->headers,
           basicAuth,
           handle->requestBody.empty() ? nullptr : handle->requestBody.c_str(),
-          response, handle->config.timeout_ms)) {
+          response, true, timeouts(handle->config))) {
     return false;
   }
 
