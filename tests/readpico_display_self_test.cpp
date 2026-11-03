@@ -134,8 +134,8 @@ int main(int argc, char** argv) {
   if (std::strcmp(argv[1], "wake") == 0) {
     assert(SDL_Init(SDL_INIT_TIMER) == 0);
     SimulatorLifecycle::initProcessArgs(argv);
-    gpio.begin();
     if (gpio.getWakeupReason() == HalGPIO::WakeupReason::PowerButton) {
+      gpio.begin();
       const auto now = std::chrono::steady_clock::now().time_since_epoch();
       const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now).count() -
                            std::strtoll(std::getenv("READPICO_TEST_SLEEP_START"), nullptr, 10);
@@ -149,6 +149,7 @@ int main(int argc, char** argv) {
     assert(setenv("READPICO_TEST_SLEEP_START", std::to_string(startMs).c_str(), 1) == 0);
     // Only POWER may wake: UP stays down but must not trigger a relaunch.
     assert(setenv("CROSSPOINT_SIM_INPUT_SCRIPT", "0:UP:1000;80:POWER", 1) == 0);
+    gpio.begin();
     gpio.startDeepSleep();
     assert(false);
   }
