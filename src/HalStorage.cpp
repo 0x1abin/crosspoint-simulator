@@ -1,5 +1,7 @@
 #include "HalStorage.h"
 
+#include "SimulatorStorageRoot.h"
+
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -20,14 +22,7 @@ HalStorage::HalStorage() {}
 
 namespace {
 std::recursive_mutex storageTransactionMutex;
-
-std::string configuredStorageRoot() {
-  const char *root = std::getenv("CROSSPOINT_SIM_SD");
-  if (!root || !*root) {
-    root = std::getenv("CROSSPOINT_EMU_SD");
-  }
-  return (root && *root) ? std::string(root) : std::string("./fs_");
-}
+using crosspoint_simulator::storageRoot;
 
 bool containsUnsafeSegment(const std::string &path) {
   std::stringstream stream(path);
@@ -54,7 +49,7 @@ std::string resolveStoragePath(const char *path) {
     logical.erase(logical.begin());
   }
 
-  std::string root = configuredStorageRoot();
+  std::string root = storageRoot();
   while (root.size() > 1 && root.back() == '/') {
     root.pop_back();
   }
@@ -87,7 +82,7 @@ HalStorage::StorageLock::StorageLock() { storageTransactionMutex.lock(); }
 HalStorage::StorageLock::~StorageLock() { storageTransactionMutex.unlock(); }
 
 bool HalStorage::begin() {
-  const std::string root = configuredStorageRoot();
+  const std::string root = storageRoot();
   for (size_t i = 1; i < root.size(); ++i) {
     if (root[i] == '/') {
       ::mkdir(root.substr(0, i).c_str(), 0777);
@@ -109,7 +104,7 @@ bool HalStorage::getSpace(uint64_t &totalBytes, uint64_t &freeBytes) {
   freeBytes = 0;
 
   struct statvfs space {};
-  if (::statvfs(configuredStorageRoot().c_str(), &space) != 0)
+  if (::statvfs(storageRoot().c_str(), &space) != 0)
     return false;
 
   const uint64_t blockSize = space.f_frsize ? space.f_frsize : space.f_bsize;

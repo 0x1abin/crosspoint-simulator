@@ -73,7 +73,14 @@ inline esp_err_t nvs_set_blob(nvs_handle_t raw, const char* key, const void* val
   std::filesystem::rename(temporary, file, error);
   return error ? ESP_FAIL : ESP_OK;
 }
-inline esp_err_t nvs_get_u8(nvs_handle_t, const char*, uint8_t*) { return ESP_FAIL; }
-inline esp_err_t nvs_set_u8(nvs_handle_t, const char*, uint8_t) { return ESP_OK; }
+inline esp_err_t nvs_get_u8(nvs_handle_t handle, const char* key, uint8_t* value) {
+  if (!value) return ESP_ERR_INVALID_ARG;
+  size_t length = 1;
+  const auto err = nvs_get_blob(handle, key, value, &length);
+  return err == ESP_OK && length != 1 ? ESP_ERR_NVS_INVALID_LENGTH : err;
+}
+inline esp_err_t nvs_set_u8(nvs_handle_t handle, const char* key, uint8_t value) {
+  return nvs_set_blob(handle, key, &value, 1);
+}
 inline esp_err_t nvs_commit(nvs_handle_t) { return ESP_OK; }
 inline void nvs_close(nvs_handle_t raw) { delete reinterpret_cast<simulator_nvs::Handle*>(raw); }

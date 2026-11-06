@@ -63,8 +63,10 @@ class HTTPClient {
   }
   void setFollowRedirects(int mode) { followRedirects_ = mode != HTTPC_DISABLE_FOLLOW_REDIRECTS; }
   void setReuse(bool reuse) { (void)reuse; }
-  void setConnectTimeout(int32_t timeout) { (void)timeout; }
-  void setTimeout(uint16_t timeout) { timeoutMs_ = timeout; }
+  void setConnectTimeout(int32_t timeout) {
+    if (timeout > 0) timeouts_.connectMs = static_cast<unsigned long>(timeout);
+  }
+  void setTimeout(uint16_t timeout) { timeouts_.readMs = timeout; }
   void addHeader(const char* name, const String& value) {
     if (name) headers_[name] = value.c_str();
   }
@@ -72,7 +74,8 @@ class HTTPClient {
     if (name) headers_[name] = value ? value : "";
   }
   void setAuthorization(const char* user, const char* pass) {
-    if (user && pass) basicAuth_ = std::string(user) + ":" + pass;
+    // An empty user turns auth off, as FreeInk's setBasicAuth() does.
+    basicAuth_ = user && *user && pass ? std::string(user) + ":" + pass : std::string();
   }
 
   int GET() { return perform("GET", nullptr); }
@@ -80,6 +83,10 @@ class HTTPClient {
   int POST(const char* body) { return perform("POST", body ? body : ""); }
   int PUT(const char* body) { return perform("PUT", body ? body : ""); }
   int PUT(const String& body) { return perform("PUT", body.c_str()); }
+  // Any method; an empty payload sends no body.
+  int sendRequest(const char* type, const String& payload) {
+    return perform(type ? type : "GET", payload.isEmpty() ? nullptr : payload.c_str());
+  }
 
   String getString() { return responseBody_; }
   int getSize() { return static_cast<int>(responseBody_.length()); }
@@ -180,14 +187,14 @@ class HTTPClient {
   int statusCode_ = 0;
   bool responseComplete_ = false;
   bool followRedirects_ = true;
-  int timeoutMs_ = 60000;
+  sim_http_fetch::Timeouts timeouts_;
   std::vector<std::pair<std::string, std::string>> responseHeaders_;
 
   int perform(const char* method, const char* body) {
     if (url_.empty()) return 0;
 
     sim_http_fetch::Response response;
-    if (!sim_http_fetch::fetch(url_, method, headers_, basicAuth_, body, response, timeoutMs_, followRedirects_)) {
+    if (!sim_http_fetch::fetch(url_, method, headers_, basicAuth_, body, response, followRedirects_, timeouts_)) {
       responseBody_ = "";
       responseStream_.reset();
       statusCode_ = 0;

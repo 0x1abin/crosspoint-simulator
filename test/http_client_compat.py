@@ -13,9 +13,40 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+    def echo(self, send_body=True):
+        length = int(self.headers.get("Content-Length") or 0)
+        sent = self.rfile.read(length).decode()
+        body = (f"{self.command} once={self.headers.get('X-Once', '')} ua={self.headers.get('User-Agent')} "
+                f"auth={'yes' if self.headers.get('Authorization') else 'no'} body={sent}").encode()
+        self.send_response(200)
+        self.send_header("Content-Length", len(body))
+        self.end_headers()
+        if send_body:
+            self.wfile.write(body)
+
+    do_POST = do_PUT = do_PATCH = do_DELETE = echo
+
+    def do_HEAD(self):
+        self.echo(send_body=False)
+
     def do_GET(self):
         if self.path == "/slow":
             time.sleep(1.2)
+        if self.path == "/echo":
+            self.echo()
+            return
+        if self.path == "/slow-start":
+            time.sleep(2.5)
+        elif self.path == "/trickle":
+            # 6 bytes over 3 s: longer than a 2 s timeout, never idle for 2 s.
+            self.send_response(200)
+            self.send_header("Content-Length", "6")
+            self.end_headers()
+            for byte in b"slowly":
+                self.wfile.write(bytes([byte]))
+                self.wfile.flush()
+                time.sleep(0.5)
+            return
         body = b"book"
         status = 302 if self.path in ("/redirect", "/cross-origin", "/loop") else 200
         self.send_response(status)
@@ -61,7 +92,8 @@ def main():
             finally:
                 server.shutdown()
                 thread.join()
-    print("PASS HTTP status, headers, lengths, redirects, origin scoping, cancellation")
+    print("PASS HTTP status, headers, lengths, redirects, origin scoping, cancellation, timeouts, "
+          "per-request headers, methods")
 
 
 if __name__ == "__main__":

@@ -51,6 +51,31 @@ const int CONTENT_LENGTH_UNKNOWN = -1;
 
 class WebServer;
 
+// Same interface as arduino-esp32's middleware/Middleware.h. Each middleware
+// runs before route dispatch and calls next() to continue the chain.
+class Middleware {
+public:
+  typedef std::function<bool(void)> Callback;
+  typedef std::function<bool(WebServer &server, Callback next)> Function;
+
+  virtual ~Middleware() {}
+  virtual bool run(WebServer &server, Callback next) {
+    (void)server;
+    return next();
+  }
+};
+
+class MiddlewareFunction : public Middleware {
+public:
+  MiddlewareFunction(Middleware::Function fn) : _fn(fn) {}
+  bool run(WebServer &server, Middleware::Callback next) override {
+    return _fn(server, next);
+  }
+
+private:
+  Middleware::Function _fn;
+};
+
 class RequestHandler {
 public:
   virtual ~RequestHandler() {}
@@ -58,6 +83,8 @@ public:
                          const String &uri) {
     return false;
   }
+  virtual bool canUpload(WebServer &request, const String &uri) { return false; }
+  virtual void upload(WebServer &request, const String &uri, HTTPUpload &upload) {}
   virtual bool canRaw(WebServer &request, const String &uri) { return false; }
   virtual void raw(WebServer &request, const String &uri, HTTPRaw &raw) {}
   virtual bool handle(WebServer &request, HTTPMethod method,
@@ -83,6 +110,9 @@ public:
   void collectHeaders(const char **headers, size_t count);
   void stop();
   void addHandler(RequestHandler *handler);
+  WebServer &addMiddleware(Middleware *middleware);
+  WebServer &addMiddleware(Middleware::Function fn);
+  WebServer &removeMiddleware(Middleware *middleware);
   void send(int code, const char *content_type, const char *content);
   void send(int code, const char *content_type, const String &content) {
     send(code, content_type, content.c_str());
@@ -116,6 +146,9 @@ public:
   HTTPUpload &upload();
 
 protected:
+  NetworkClient _currentClient;
+  virtual size_t _currentClientWrite(const char *buffer, size_t len);
+  virtual size_t _currentClientWrite_P(const char *buffer, size_t len);
   struct RequestArgument { String key; String value; };
   RequestArgument *_currentArgs = nullptr;
   int _currentArgCount = 0;
