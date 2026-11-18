@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <BoardConfig.h>
 #include <EInkDisplay.h>
+#include <DisplayRefreshContext.h>
 
 class HalDisplay {
 public:
@@ -30,6 +31,7 @@ public:
   Controller getController() const;
   GrayscaleCapabilities grayscaleCapabilities(
       GrayscaleMode mode = GrayscaleMode::Overlay) const;
+  const char* controllerName() const;
 
   // Constructor with pin configuration
   HalDisplay();
@@ -68,8 +70,10 @@ public:
   bool isInverted() const;
 
   void displayBuffer(RefreshMode mode = RefreshMode::FAST_REFRESH,
-                     bool turnOffScreen = false);
-  void displayBufferAsync(RefreshMode mode = RefreshMode::FAST_REFRESH);
+                     bool turnOffScreen = false,
+                     DisplayRefreshContext context = DisplayRefreshContext::Normal);
+  void displayBufferAsync(RefreshMode mode = RefreshMode::FAST_REFRESH,
+                          DisplayRefreshContext context = DisplayRefreshContext::Normal);
   void waitRefreshComplete();
   bool displayCommitted() const;
   void cancelGrayscale();
@@ -98,7 +102,8 @@ public:
   uint32_t getBufferSize() const;
 
   void displayGrayscaleBase(RefreshMode fallback = HALF_REFRESH,
-                            bool turnOffScreen = false);
+                            bool turnOffScreen = false,
+                            DisplayRefreshContext context = DisplayRefreshContext::Normal);
   bool displayGrayscaleBase(GrayscaleMode mode,
                             RefreshMode fallback = HALF_REFRESH,
                             bool turnOffScreen = false);
@@ -121,6 +126,10 @@ public:
   bool supportsStripGrayscale() const;
   bool supportsAsyncGrayscaleBase() const;
   bool combinesGrayscaleBase() const;
+  bool supportsTextOnlyCombinedBase() const;
+  bool supportsReaderTransitions() const { return false; }
+  bool supportsContinuousImageReading() const { return false; }
+  bool canUseTextTransition() const { return false; }
 
   // Simulator only: call from main thread to push rendered pixels to SDL.
   void presentIfNeeded();
@@ -128,6 +137,7 @@ public:
   bool shouldQuit() const;
 
 private:
+  DisplayRefreshContext refreshContext = DisplayRefreshContext::Normal;
   EInkDisplay einkDisplay;
   bool inverted = false;
 };

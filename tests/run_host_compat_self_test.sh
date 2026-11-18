@@ -14,6 +14,8 @@ compile=(
   "$repo_root/src/HalFrontlight.cpp"
   "$repo_root/src/HalStorage.cpp"
   "$repo_root/src/HalSystem.cpp"
+  "$repo_root/src/SimHttpRoutes.cpp"
+  "-I${ARDUINOJSON_INCLUDE:?Set ARDUINOJSON_INCLUDE to ArduinoJson src for native route tests}"
 )
 if [[ -n "${LDFLAGS:-}" ]]; then
   read -r -a extra_link_flags <<< "$LDFLAGS"

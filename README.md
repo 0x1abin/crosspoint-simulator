@@ -83,6 +83,12 @@ these flags:
   BOOT/confirm, P to power, and Up/Down to volume; Page Up/Page Down model
   cover Prev/Next. Escape and Left/Right are disabled because this board has no corresponding buttons.
   See [the profile contract and verification](docs/metalio-eink4.md).
+- `-DSIMULATOR_DEVICE_METALIO_EINK4_PLUS` selects the Metalio E-Ink 4 Plus's 4.7" 1216x684
+  EPDiy profile with FT6336U-compatible touch, cover Home-key input, RTC, tilt
+  availability, haptics, and dual-channel PWM warm/cool frontlight state. See
+  [the profile contract and verification](docs/metalio-eink4-plus.md). This is a
+  host-only profile: SDK `c342aa58` has no matching BSP; no firmware target or
+  physical-device acceptance is added.
 - `-DSIMULATOR_DEVICE_EEGO_A4` selects the EEGO A4's 768x552 UC8279C
   profile, GSLX680-compatible touch, RTC and optional warm/cool I2C frontlight.
   Up/Down and P are its only physical buttons; H models the touch controller's
@@ -99,7 +105,7 @@ these flags:
 
 The sample PlatformIO files include ready-to-use environments for the original
 profiles plus `simulator_eego_a4`, `simulator_eego_a4_no_frontlight`, `simulator_picco`,
-`simulator_metalio_eink4`, `simulator_murphy_m4`,
+`simulator_metalio_eink4`, `simulator_metalio_eink4_plus`, `simulator_murphy_m4`,
 `simulator_mofei_m4`, `simulator_sticky`, `simulator_papermono`,
 `simulator_x3_uc8279`, `simulator_x4_uc8179`, `simulator_x4_uc8279`,
 `simulator_x4_pro_uc8179`, `simulator_x4_pro_uc8279`, and the three
@@ -210,6 +216,16 @@ tests possible without desktop-control permissions:
   and `NEXT` for its capacitive cover page keys; `UP`/`DOWN` remain physical
   volume keys. A key pressed at 0 ms is already held when the firmware
   starts, like a button held at power-on.
+- `WAIT:<regex>` pauses the script until a firmware log line matches the
+  pattern (ECMAScript syntax, `;` not allowed). Lines logged since the last
+  scripted input count, so a WAIT placed after a key press also sees what that
+  press logged right away. Times after a WAIT count from the moment it
+  matched. If nothing matches within 30 s (`CROSSPOINT_SIM_WAIT_TIMEOUT_MS`),
+  the simulator exits with status 1; a pattern that does not compile exits
+  with status 2.
+- `SHOT:<path>` saves a BMP screenshot of the current screen. Unlike
+  `CROSSPOINT_SIM_SCREENSHOTS`, it follows the script, so it stays in step
+  with WAIT.
 - Picco accepts `SWITCH_ON` and `SWITCH_OFF` to set the slide-switch position.
   `CROSSPOINT_SIM_SLIDE_SWITCH=on` selects its initial position (default off).
 - Touch-device actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
@@ -224,6 +240,22 @@ tests possible without desktop-control permissions:
 - `CROSSPOINT_SIM_SCREENSHOTS` saves BMP screenshots as
   `<milliseconds>:<path>`, separated by semicolons. Create the destination
   directory before running the simulator.
+- `CROSSPOINT_SIM_SCREEN_TEXT=1` prints the text on screen after each display
+  refresh, in reading order, as one serial line:
+  `[SIM] SCREEN: 100% | SD card | books | / | « Home | Open | Up | Down`.
+  Each string the firmware drew since the last full clear is one entry, so
+  a book page lists one entry per word. A refresh that shows the same text
+  again prints nothing. The line goes through the serial port like a firmware
+  log line, so a test can check a screen from the log instead of reading a
+  screenshot. The simulator build compiles a copy of the firmware's
+  `GfxRenderer.cpp` whose `drawText()` reports its strings. If that function
+  changes too much to patch, the build prints
+  `Simulator: GfxRenderer::drawText changed` and the feature is off.
+- WAIT retains at most 4096 lines and 1 MiB of text, with a 16 KiB prefix
+  per line. Container overhead is additional. Raw serial output remains complete,
+  but truncated or evicted text cannot match WAIT and may cause its explicit
+  timeout. SCREEN observes text at completed B/W, grayscale and native16 commits;
+  use whole-page screenshots to check layout, images and appearance.
 - `CROSSPOINT_SIM_FREE_HEAP` and `CROSSPOINT_SIM_MAX_ALLOC_HEAP` override the
   ESP heap metrics reported to firmware. They are useful for repeatable
   low-memory paths without exhausting the host process. Values are byte counts;
@@ -236,12 +268,22 @@ tests possible without desktop-control permissions:
   pre-sleep schedules are cleared during relaunch so they cannot repeat
   forever.
 
-Times are measured from process startup. For example:
+Times are measured from process startup, or from the last matched WAIT. For
+example:
 
 ```bash
 mkdir -p ./qa-artifacts
 CROSSPOINT_SIM_INPUT_SCRIPT='900:DOWN;1250:DOWN;1600:DOWN;1900:ENTER;3000:QUIT' \
 CROSSPOINT_SIM_SCREENSHOTS='2400:./qa-artifacts/settings.bmp' \
+  .pio/build/simulator/program
+```
+
+With WAIT, a script follows the firmware instead of guessing how long each
+screen takes. Each time counts from the previous WAIT, so the second WAIT
+comes after the ENTER that causes it:
+
+```bash
+CROSSPOINT_SIM_INPUT_SCRIPT='0:WAIT:Entering activity: Home;300:SHOT:./qa-artifacts/home.bmp;500:ENTER;500:WAIT:Entering activity: FileBrowser;300:SHOT:./qa-artifacts/files.bmp;400:QUIT' \
   .pio/build/simulator/program
 ```
 
@@ -274,6 +316,41 @@ The screenshot contains the SDL renderer output at the host's actual drawable
 resolution, including Retina/HiDPI scaling. BMP is used because it is supported
 directly by SDL2 and adds no image-encoding dependency to the simulator.
 
+## Running an SD plugin
+
+`tools/run_plugin.py` starts the simulator with one plugin installed on a
+fresh SD card, with plugins enabled and the Plugin Hub prompt hidden. Run it
+from the firmware project after `pio run -e simulator`:
+
+```bash
+python3 ../crosspoint-simulator/tools/run_plugin.py ../my-plugin/my.crosspoint-plugin \
+  --config my-config.json --open
+```
+
+- `--config` installs a JSON file as the plugin's config file (the name in
+  `device.json` `config.file`, default `config.json`).
+- `--open` goes to Home > Plugins > the plugin and connects to the first
+  simulated Wi-Fi network, so the window opens on the plugin's first screen.
+- `--script` adds input steps. With `--open`, their times count from the
+  plugin opening.
+- `--routes`, `--http-log`, and `--port` set `CROSSPOINT_SIM_HTTP_ROUTES`,
+  `CROSSPOINT_SIM_HTTP_LOG`, and `CROSSPOINT_SIM_HTTP_PORT`.
+- Screen text is on; `--no-screen-text` turns it off. `--headless` runs
+  without a window.
+- The SD card is a temporary folder deleted on exit, so a token in the config
+  does not stay on disk. `--sd <folder>` keeps the card between runs; the
+  plugin folder is copied over it each time, and files the plugin wrote stay.
+
+The exit status is the simulator's, so a script that ends in `QUIT` works as a
+test: a WAIT that times out exits with 1. For example, this checks that a
+plugin lists the folders the API returns, without the network:
+
+```bash
+python3 ../crosspoint-simulator/tools/run_plugin.py ../my-plugin/my.crosspoint-plugin \
+  --config test-config.json --routes test-routes.json --open --headless \
+  --script '0:WAIT:SCREEN:.*Tech;300:SHOT:folders.bmp;500:QUIT'
+```
+
 ## Notes
 
 **Host-backed network flows**: OPDS/catalog downloads and KOReader sync use the
@@ -300,6 +377,41 @@ CROSSPOINT_SIM_HTTP_MOCK_ROOT="$PWD/lib/EpdFont/scripts/output" \
 
 The mock still uses the firmware's normal manifest parsing, file download,
 write-to-SD, `.cpfont` validation, registry refresh, and font-selection flow.
+
+**HTTP routes**: Set `CROSSPOINT_SIM_HTTP_ROUTES` to a JSON file of canned
+answers matched on method, full URL, and request headers. This tests a
+plugin or catalog against an API without the service or a real account,
+including error answers such as 401 or 500. Routes are checked before
+`CROSSPOINT_SIM_HTTP_MOCK_ROOT`, in file order, and the first match answers:
+
+```json
+{
+  "unmatched": "fail",
+  "routes": [
+    {
+      "method": "GET",
+      "url": "https://api.example.com/folders",
+      "request_headers": { "Authorization": "Bearer test-*" },
+      "headers": { "Content-Type": "application/json" },
+      "body": { "folders": [{ "id": 7, "title": "Tech" }] }
+    },
+    { "url": "https://api.example.com/folders", "status": 401, "body": "{}" },
+    { "url": "https://api.example.com/bookmarks?folder=7&*", "body_file": "bookmarks-7.json" }
+  ]
+}
+```
+
+- `url` and the `request_headers` values match the whole text, where `*`
+  matches anything. Header names ignore case. `method` defaults to any.
+- `status` defaults to 200. `body` is sent as is when it is a string and as
+  JSON otherwise; `body_file` is read relative to the routes file.
+- With `"unmatched": "fail"`, a request no route answers fails as if the
+  server refused the connection, and the simulator prints its method and URL
+  without the query. The default, `"network"`, sends it on as usual.
+- The file is read again for each request, so a test can change the answers
+  while the simulator runs. A file that cannot be read or parsed fails every
+  request.
+- The top level can also be just the array of routes.
 
 **File transfer**: The simulator provides host-backed `WebServer`,
 `WebSocketsServer`, and `NetworkClient` shims so firmware-owned file-transfer
@@ -362,7 +474,7 @@ sample config's opt-in flags when decoder compatibility matters more than the
 self-contained default. Neither mode simulates device-specific e-ink image
 quality, refresh behaviour, or memory pressure.
 
-**Cache**: On first open of an ebook, an "Indexing..." popup will appear while the section cache is built. If you see rendering issues after a code change that affects layout, delete `./fs_/.crosspoint/` to clear stale caches.
+**Cache**: On first open, an "Indexing..." popup appears while the section cache is built. Use separate `CROSSPOINT_SIM_SD` folders and working directories per comparison run (`CROSSPOINT_EMU_SD` is the fallback before `./fs_`). Clear only task-owned disposable caches; preserve historical captures, user data and shared caches. The build hook observes a copy of renderer source and does not change firmware cache layouts.
 
 > [!WARNING]
 > **Upstream compatibility:** The simulator mirrors interfaces used by Crosspoint. If Crosspoint adds or changes methods in a shared library and the simulator build reaches that code path, the simulator can fail to compile or link until a matching implementation or stub is added here. In many cases this is just a small no-op shim. Open a PR if the change tracks upstream CrossPoint, fills a gap in the emulated Arduino/ESP-IDF layer, or fixes the simulator itself. If the change only matches your own fork's HAL, maintain it in a fork of this repo instead. See [FORKING.md](FORKING.md).
@@ -385,3 +497,9 @@ successful gray commit. Cancellation discards pending pixels; cleanup with a B/W
 snapshot can submit a fallback. Power releases retain their measured duration,
 so a long press is not classified as a short Confirm click. EEGO Home and screen
 contacts share a cancellation barrier until both are released.
+
+
+Native HTTP fixture checks use the consuming project's existing ArduinoJson 7
+headers. Set `ARDUINOJSON_INCLUDE=/path/to/ArduinoJson/src` before running
+`bash tests/run_host_compat_self_test.sh` or
+`python3 tests/run_network_self_test.py`; no library download occurs in the test.

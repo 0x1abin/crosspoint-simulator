@@ -9,6 +9,7 @@ trap 'rm -rf "$test_dir"' EXIT
   -I"$sim_root/tests/display_stubs" -I"$sim_root/src" -I"$project_root/lib/Memory" \
   "$sim_root/tests/readpico_display_self_test.cpp" "$sim_root/src/HalDisplay.cpp" \
   "$sim_root/src/HalGPIO.cpp" "$sim_root/src/SimulatorLifecycle.cpp" \
+  "$sim_root/src/SimLog.cpp" "$sim_root/src/SimScreenText.cpp" \
   $(sdl2-config --cflags --libs) -pthread -o "$test_dir/check"
 for orientation in 0 1 2 3; do
   "$test_dir/check" "$orientation" "$test_dir/$orientation.bmp"

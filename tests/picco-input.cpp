@@ -20,7 +20,19 @@
 #include <cstdlib>
 #include <cstring>
 
+void scheduleSimulatorScreenshot(const std::string &) {}
+
 GfxRenderer renderer;
+static int panelWidth() {
+  const auto o = renderer.getOrientation();
+  return o == GfxRenderer::Portrait || o == GfxRenderer::PortraitInverted
+             ? HalDisplay::DISPLAY_HEIGHT : HalDisplay::DISPLAY_WIDTH;
+}
+static int panelHeight() {
+  const auto o = renderer.getOrientation();
+  return o == GfxRenderer::Portrait || o == GfxRenderer::PortraitInverted
+             ? HalDisplay::DISPLAY_WIDTH : HalDisplay::DISPLAY_HEIGHT;
+}
 std::atomic<bool> quitRequested{false};
 
 static int presses[7] = {};
@@ -143,8 +155,8 @@ int main(int argc, char **argv) {
   for (int orientation = 0; orientation < 4; ++orientation) {
     renderer.setOrientation(static_cast<GfxRenderer::Orientation>(orientation));
     for (int corner = 0; corner < 2; ++corner) {
-      const int x = corner ? renderer.getScreenWidth() - 1 : 0;
-      const int y = corner ? renderer.getScreenHeight() - 1 : 0;
+      const int x = corner ? panelWidth() - 1 : 0;
+      const int y = corner ? panelHeight() - 1 : 0;
       float nx, ny;
       mouse(SDL_MOUSEBUTTONDOWN, x, y);
       assert(gpio.wasTouchDown(nx, ny));
@@ -155,7 +167,7 @@ int main(int argc, char **argv) {
     }
     float x1, y1, x2, y2;
     mouse(SDL_MOUSEBUTTONDOWN, 10, 100);
-    mouse(SDL_MOUSEBUTTONUP, renderer.getScreenWidth() - 10, 100);
+    mouse(SDL_MOUSEBUTTONUP, panelWidth() - 10, 100);
     assert(gpio.wasSwipe(x1, y1, x2, y2));
     assert(!gpio.wasTouchTap(x1, y1));
   }

@@ -12,7 +12,7 @@
 
 #if (defined(SIMULATOR_DEVICE_READPICO) + defined(SIMULATOR_DEVICE_X3) + defined(SIMULATOR_DEVICE_X4_PRO) +          \
      defined(SIMULATOR_DEVICE_X4_CLASSIC) + defined(SIMULATOR_DEVICE_STICKY) + defined(SIMULATOR_DEVICE_PAPERMONO) + \
-     defined(SIMULATOR_DEVICE_EEGO_A4) + defined(SIMULATOR_DEVICE_METALIO_EINK4) + defined(SIMULATOR_DEVICE_PICCO) +                                                                             \
+     defined(SIMULATOR_DEVICE_EEGO_A4) + defined(SIMULATOR_DEVICE_METALIO_EINK4) + defined(SIMULATOR_DEVICE_PICCO) + defined(SIMULATOR_DEVICE_METALIO_EINK4_PLUS) +                                                                             \
      (defined(SIMULATOR_DEVICE_MURPHY_M4) || defined(SIMULATOR_DEVICE_MOFEI_M4))) > 1
 #error "Select at most one simulated device"
 #endif
@@ -25,7 +25,7 @@
 #error "Xteink X3 revisions use UC8253 or UC8279d, not UC8179"
 #endif
 
-#if (defined(SIMULATOR_DEVICE_READPICO) || defined(SIMULATOR_DEVICE_STICKY) || defined(SIMULATOR_DEVICE_PAPERMONO) || \
+#if (defined(SIMULATOR_DEVICE_METALIO_EINK4_PLUS) || defined(SIMULATOR_DEVICE_READPICO) || defined(SIMULATOR_DEVICE_STICKY) || defined(SIMULATOR_DEVICE_PAPERMONO) || \
      defined(SIMULATOR_DEVICE_METALIO_EINK4) || defined(SIMULATOR_DEVICE_MURPHY_M4) ||                                      \
      defined(SIMULATOR_DEVICE_MOFEI_M4)) &&                                                                           \
     (defined(SIMULATOR_DISPLAY_UC8179) || defined(SIMULATOR_DISPLAY_UC8279))
@@ -43,6 +43,13 @@
 
 #if defined(SIMULATOR_DEVICE_PICCO) && (defined(SIMULATOR_DISPLAY_UC8179) || defined(SIMULATOR_DISPLAY_UC8279))
 #error "Picco uses its own SSD1677/SSD2677 panel probe; do not select an Xteink controller override"
+#endif
+
+#undef FREEINK_DEVICE_METALIO_EINK4_PLUS
+#if defined(SIMULATOR_DEVICE_METALIO_EINK4_PLUS)
+#define FREEINK_DEVICE_METALIO_EINK4_PLUS 1
+#else
+#define FREEINK_DEVICE_METALIO_EINK4_PLUS 0
 #endif
 
 #undef FREEINK_DEVICE_PICCO
@@ -70,10 +77,22 @@
 #define FREEINK_CAP_HAPTIC 1
 #else
 #define FREEINK_DEVICE_METALIO_EINK4 0
-#define FREEINK_CAP_HAPTIC 0
+#define FREEINK_CAP_HAPTIC FREEINK_DEVICE_METALIO_EINK4_PLUS
 #endif
 
-#if defined(SIMULATOR_DEVICE_PICCO)
+#if defined(SIMULATOR_DEVICE_METALIO_EINK4_PLUS)
+#define FREEINK_DEVICE_X4 0
+#define FREEINK_DEVICE_X3 0
+#define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
+#define FREEINK_DEVICE_STICKY 0
+#define FREEINK_DEVICE_PAPERMONO 0
+#define FREEINK_DEVICE_EEGO_A4 0
+#define FREEINK_DEVICE_MURPHY_M4 0
+#define FREEINK_DEVICE_MOFEI_M4 0
+#define FREEINK_CAP_TOUCH 1
+#define FREEINK_CAP_FRONTLIGHT 1
+#elif defined(SIMULATOR_DEVICE_PICCO)
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
@@ -215,7 +234,7 @@
 #endif
 
 #define FREEINK_MCU_C3 (FREEINK_DEVICE_X3 || FREEINK_DEVICE_X4)
-#define FREEINK_CAP_WARMLIGHT (FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_EEGO_A4 || FREEINK_DEVICE_MURPHY_M4 || FREEINK_DEVICE_PICCO)
+#define FREEINK_CAP_WARMLIGHT (FREEINK_DEVICE_METALIO_EINK4_PLUS || FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_EEGO_A4 || FREEINK_DEVICE_MURPHY_M4 || FREEINK_DEVICE_PICCO)
 
 namespace BoardConfig {
 
@@ -233,6 +252,7 @@ enum class Board {
   ReadPico,
   MetalioEInk4,
   Picco,
+  MetalioEInk4Plus,
 };
 
 enum class DisplayController {
@@ -244,6 +264,7 @@ enum class DisplayController {
   UC8279 = 6,
   UC8179 = 7,
   UC8279C = 8,
+  Epdiy = 9,
 };
 
 enum class TouchController : uint8_t { None, Chsc6x, Gt911, Ft5x06, Ft6336u, Gslx680, Cst836u, Cst816s, Tma525c };
@@ -258,6 +279,26 @@ struct ViewableInsets {
   uint8_t bottom = 3;
   uint8_t left = 3;
 };
+
+constexpr float defaultUiScale(Board board) {
+  switch (board) {
+  case Board::MetalioEInk4: return 1.25f;
+  case Board::MetalioEInk4Plus: return 1.5f;
+  case Board::XteinkX4Pro:
+  case Board::EegoA4:
+  case Board::MurphyM4:
+  case Board::MofeiM4:
+  case Board::Sticky:
+  case Board::ReadPico:
+  case Board::Picco: return 1.2f;
+  case Board::XteinkX4:
+  case Board::XteinkX3:
+  case Board::XteinkX3Uc8279:
+  case Board::XteinkX4Classic:
+  case Board::PaperMono: return 1.0f;
+  }
+  return 1.0f;
+}
 
 struct BoardProfile {
   Board board;
@@ -282,6 +323,7 @@ struct BoardProfile {
   uint8_t wifiMaxTxPower = 0;
   int8_t statusBarOffsetY = 0;
   uint8_t bottomCornerRadius = 0;
+  float uiScale = defaultUiScale(board);
 };
 
 #if defined(SIMULATOR_DISPLAY_UC8179)
@@ -328,7 +370,7 @@ inline constexpr BoardProfile EEGO_A4 = {Board::EegoA4,
                                          4,  // retain the fork grayscaleLevels field
                                          6,
                                          24,
-                                         18,
+                                         8,
                                          80,
                                          80,
                                          60,
@@ -356,6 +398,19 @@ inline constexpr BoardProfile METALIO_EINK4 = {Board::MetalioEInk4,
                                                480,
                                                {TouchController::Cst816s}};
 
+inline constexpr BoardProfile METALIO_EINK4_PLUS = {
+    .board = Board::MetalioEInk4Plus,
+    .name = "metalio_eink4_plus",
+    .displayController = DisplayController::Epdiy,
+    .displayControllerVariant = 0,
+    .input = {-1, -1},
+    .viewableInsets = {2, 2, 12, 2},
+    .displayWidth = 1216,
+    .displayHeight = 684,
+    .touch = {TouchController::Ft6336u},
+    .wifiMaxTxPower = 60,
+    .uiScale = 1.5f};
+
 inline constexpr BoardProfile READ_PICO = {Board::ReadPico, "read_pico", DisplayController::LgfxEpd, 0, {-1, -1},
                                            {5, 5, 8, 5}, 1216, 684, {TouchController::Cst836u}, 16};
 
@@ -364,34 +419,37 @@ inline constexpr BoardProfile PICCO = {
     800,          480,     {TouchController::Tma525c}};
 
 #if defined(SIMULATOR_DEVICE_PICCO)
-inline BoardProfile ACTIVE = PICCO;
+inline constexpr BoardProfile DEFAULT_DEVICE = PICCO;
 #elif defined(SIMULATOR_DEVICE_READPICO)
-inline BoardProfile ACTIVE = READ_PICO;
+inline constexpr BoardProfile DEFAULT_DEVICE = READ_PICO;
+#elif defined(SIMULATOR_DEVICE_METALIO_EINK4_PLUS)
+inline constexpr BoardProfile DEFAULT_DEVICE = METALIO_EINK4_PLUS;
 #elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
-inline BoardProfile ACTIVE = METALIO_EINK4;
+inline constexpr BoardProfile DEFAULT_DEVICE = METALIO_EINK4;
 #elif defined(SIMULATOR_DEVICE_PAPERMONO)
-inline BoardProfile ACTIVE = PAPER_MONO;
+inline constexpr BoardProfile DEFAULT_DEVICE = PAPER_MONO;
 #elif defined(SIMULATOR_DEVICE_STICKY)
-inline BoardProfile ACTIVE = STICKY;
+inline constexpr BoardProfile DEFAULT_DEVICE = STICKY;
 #elif defined(SIMULATOR_DEVICE_EEGO_A4)
-inline BoardProfile ACTIVE = EEGO_A4;
+inline constexpr BoardProfile DEFAULT_DEVICE = EEGO_A4;
 #elif defined(SIMULATOR_DEVICE_MURPHY_M4)
-inline BoardProfile ACTIVE = MURPHY_M4;
+inline constexpr BoardProfile DEFAULT_DEVICE = MURPHY_M4;
 #elif defined(SIMULATOR_DEVICE_MOFEI_M4)
-inline BoardProfile ACTIVE = MOFEI_M4;
+inline constexpr BoardProfile DEFAULT_DEVICE = MOFEI_M4;
 #elif defined(SIMULATOR_DEVICE_X4_PRO)
-inline BoardProfile ACTIVE = XTEINK_X4_PRO;
+inline constexpr BoardProfile DEFAULT_DEVICE = XTEINK_X4_PRO;
 #elif defined(SIMULATOR_DEVICE_X4_CLASSIC)
-inline BoardProfile ACTIVE = XTEINK_X4_CLASSIC;
+inline constexpr BoardProfile DEFAULT_DEVICE = XTEINK_X4_CLASSIC;
 #elif defined(SIMULATOR_DEVICE_X3)
 #if defined(SIMULATOR_DISPLAY_UC8279)
-inline BoardProfile ACTIVE = XTEINK_X3_UC8279;
+inline constexpr BoardProfile DEFAULT_DEVICE = XTEINK_X3_UC8279;
 #else
-inline BoardProfile ACTIVE = XTEINK_X3;
+inline constexpr BoardProfile DEFAULT_DEVICE = XTEINK_X3;
 #endif
 #else
-inline BoardProfile ACTIVE = XTEINK_X4;
+inline constexpr BoardProfile DEFAULT_DEVICE = XTEINK_X4;
 #endif
+inline BoardProfile ACTIVE = DEFAULT_DEVICE;
 
 inline bool selectDevice(Board board) {
   switch (board) {
@@ -425,6 +483,9 @@ inline bool selectDevice(Board board) {
   case Board::ReadPico:
     ACTIVE = READ_PICO;
     return true;
+  case Board::MetalioEInk4Plus:
+    ACTIVE = METALIO_EINK4_PLUS;
+    return true;
   case Board::MetalioEInk4:
     ACTIVE = METALIO_EINK4;
     return true;
@@ -450,17 +511,18 @@ inline bool isSticky() { return ACTIVE.board == Board::Sticky; }
 inline bool isReadPico() { return ACTIVE.board == Board::ReadPico; }
 inline bool isPaperMono() { return ACTIVE.board == Board::PaperMono; }
 inline bool isMetalioEInk4() { return ACTIVE.board == Board::MetalioEInk4; }
+inline bool isMetalioEInk4Plus() { return ACTIVE.board == Board::MetalioEInk4Plus; }
 inline bool hasTouch() {
-  return isX4Pro() || isEegoA4() || isMurphyM4() || isSticky() || isPaperMono() || isReadPico() || isMetalioEInk4() || isPicco();
+  return isX4Pro() || isEegoA4() || isMurphyM4() || isSticky() || isPaperMono() || isReadPico() || isMetalioEInk4() || isPicco() || isMetalioEInk4Plus();
 }
-inline bool hasHomeKey() { return isX4Pro() || isEegoA4() || isMetalioEInk4(); }
+inline bool hasHomeKey() { return isX4Pro() || isEegoA4() || isMetalioEInk4() || isMetalioEInk4Plus(); }
 inline bool hasPwmFrontlight() {
-  return isX4Pro() || isMurphyM4() || isPaperMono();
+  return isX4Pro() || isMurphyM4() || isPaperMono() || isMetalioEInk4Plus();
 }
 inline bool hasColorTemperatureFrontlight() {
-  return isX4Pro() || isMurphyM4() || isEegoA4() || isPicco();
+  return isX4Pro() || isMurphyM4() || isEegoA4() || isPicco() || isMetalioEInk4Plus();
 }
-inline bool hasI2cFrontlight() { return isEegoA4() || isPicco(); }
+inline bool hasI2cFrontlight() { return isEegoA4() || isPicco() || isMetalioEInk4Plus(); }
 
 inline void holdPowerRails() {}
 

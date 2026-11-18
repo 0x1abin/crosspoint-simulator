@@ -1,18 +1,21 @@
 #pragma once
 #include <HalDisplay.h>
+#include <cmath>
 
-// Display/input tests use the real host HAL; the firmware owns orientation.
+// Real host HAL with firmware geometry/scale; no production rendering substitute.
 class GfxRenderer {
  public:
   enum Orientation { Portrait, LandscapeClockwise, PortraitInverted, LandscapeCounterClockwise };
   Orientation orientation = Portrait;
   Orientation getOrientation() const { return orientation; }
   int getScreenWidth() const {
-    return orientation == Portrait || orientation == PortraitInverted ? HalDisplay::DISPLAY_HEIGHT
-                                                                      : HalDisplay::DISPLAY_WIDTH;
+    const bool portrait = orientation == Portrait || orientation == PortraitInverted;
+    return static_cast<int>(std::lround((portrait ? HalDisplay::DISPLAY_HEIGHT : HalDisplay::DISPLAY_WIDTH) /
+                                       BoardConfig::ACTIVE.uiScale));
   }
   int getScreenHeight() const {
-    return orientation == Portrait || orientation == PortraitInverted ? HalDisplay::DISPLAY_WIDTH
-                                                                      : HalDisplay::DISPLAY_HEIGHT;
+    const bool portrait = orientation == Portrait || orientation == PortraitInverted;
+    return static_cast<int>(std::lround((portrait ? HalDisplay::DISPLAY_WIDTH : HalDisplay::DISPLAY_HEIGHT) /
+                                       BoardConfig::ACTIVE.uiScale));
   }
 };

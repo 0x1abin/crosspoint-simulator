@@ -180,7 +180,9 @@ void testSystemInfo() {
   assert(heap.freePsramBytes == ESP.getFreePsram());
   assert(heap.totalPsramBytes == ESP.getPsramSize());
 
-  char storageRoot[] = "/tmp/crosspoint-simulator-storage.XXXXXX";
+  std::string rootTemplate = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") +
+                             "/crosspoint-simulator-storage.XXXXXX";
+  char *storageRoot = rootTemplate.data();
   assert(mkdtemp(storageRoot));
   assert(setenv("CROSSPOINT_SIM_SD", storageRoot, 1) == 0);
 
@@ -189,12 +191,19 @@ void testSystemInfo() {
   assert(Storage.getSpace(totalBytes, freeBytes));
   assert(totalBytes > 0);
   assert(freeBytes <= totalBytes);
+  assert(Storage.sdTotalBytes() == totalBytes);
+  uint64_t usedBytes = 1;
+  assert(Storage.sdUsedBytes(usedBytes));
+  assert(usedBytes <= totalBytes - freeBytes);
 
   const std::string missingRoot = std::string(storageRoot) + "/missing";
   assert(setenv("CROSSPOINT_SIM_SD", missingRoot.c_str(), 1) == 0);
   assert(!Storage.getSpace(totalBytes, freeBytes));
   assert(totalBytes == 0);
   assert(freeBytes == 0);
+  assert(Storage.sdTotalBytes() == 0);
+  assert(!Storage.sdUsedBytes(usedBytes));
+  assert(usedBytes == 0);
 
   assert(unsetenv("CROSSPOINT_SIM_SD") == 0);
   assert(rmdir(storageRoot) == 0);

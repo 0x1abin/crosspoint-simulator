@@ -34,6 +34,9 @@ public:
 #elif defined(SIMULATOR_DEVICE_X3)
   static constexpr uint16_t DISPLAY_WIDTH = 792;
   static constexpr uint16_t DISPLAY_HEIGHT = 528;
+#elif defined(SIMULATOR_DEVICE_METALIO_EINK4_PLUS)
+  static constexpr uint16_t DISPLAY_WIDTH = 1216;
+  static constexpr uint16_t DISPLAY_HEIGHT = 684;
 #else
   static constexpr uint16_t DISPLAY_WIDTH = 800;
   static constexpr uint16_t DISPLAY_HEIGHT = 480;
