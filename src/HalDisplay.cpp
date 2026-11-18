@@ -1,4 +1,5 @@
 #include "HalDisplay.h"
+#include "SimScreenText.h"
 
 #include <BoardConfig.h>
 #include <GfxRenderer.h>
@@ -69,6 +70,8 @@ struct ScreenshotEvent {
   bool handled = false;
 };
 
+// Script SHOT actions add to the schedule from the input path.
+std::mutex screenshotMutex;
 std::vector<ScreenshotEvent> screenshotEvents;
 bool screenshotEventsInitialized = false;
 const std::thread::id simulatorMainThread = std::this_thread::get_id();
@@ -101,6 +104,7 @@ void initializeScreenshotEvents() {
 }
 
 bool hasDueScreenshot() {
+  const std::lock_guard<std::mutex> lock(screenshotMutex);
   initializeScreenshotEvents();
   const unsigned long now = millis();
   for (const auto &event : screenshotEvents) {
@@ -111,8 +115,10 @@ bool hasDueScreenshot() {
 }
 
 bool saveNativeBmp(const std::string& path) {
-  const int width = renderer.getScreenWidth();
-  const int height = renderer.getScreenHeight();
+  const auto orientation = renderer.getOrientation();
+  const bool portrait = orientation == GfxRenderer::Portrait || orientation == GfxRenderer::PortraitInverted;
+  const int width = portrait ? HalDisplay::DISPLAY_HEIGHT : HalDisplay::DISPLAY_WIDTH;
+  const int height = portrait ? HalDisplay::DISPLAY_WIDTH : HalDisplay::DISPLAY_HEIGHT;
   // A full-size rotated screenshot needs separate storage; allocate only for
   // capture, fallibly, and reuse the existing display buffer as the source.
   auto pixels = makeUniqueNoThrow<uint32_t[]>(static_cast<size_t>(width) * height);
@@ -198,6 +204,7 @@ bool saveRendererBmp(const std::string &path) {
 }
 
 void captureDueScreenshots() {
+  const std::lock_guard<std::mutex> lock(screenshotMutex);
   const unsigned long now = millis();
   for (auto &event : screenshotEvents) {
     if (event.handled || event.atMs > now)
@@ -307,6 +314,12 @@ void composeGrayscalePreview() {
 
 } // namespace
 
+void scheduleSimulatorScreenshot(const std::string &path) {
+  const std::lock_guard<std::mutex> lock(screenshotMutex);
+  initializeScreenshotEvents();
+  screenshotEvents.push_back({millis(), path});
+}
+
 static bool isPortraitOrientation(GfxRenderer::Orientation orientation) {
   return orientation == GfxRenderer::Portrait ||
          orientation == GfxRenderer::PortraitInverted;
@@ -359,6 +372,27 @@ HalDisplay::~HalDisplay() {}
 #define SIMULATOR_CONTROLLER_TITLE "SSD1677"
 #endif
 
+const char* HalDisplay::controllerName() const {
+  switch (BoardConfig::ACTIVE.displayController) {
+    case BoardConfig::DisplayController::UC8253:
+      return "UC8253";
+    case BoardConfig::DisplayController::UC8279C:
+      return "UC8279C";
+    case BoardConfig::DisplayController::UC8179:
+      return "UC8179";
+    case BoardConfig::DisplayController::UC8279:
+      return "UC8279";
+    case BoardConfig::DisplayController::Epdiy:
+      return "EPDiy";
+    case BoardConfig::DisplayController::ED2208: return "ED2208";
+    case BoardConfig::DisplayController::LgfxEpd: return "LovyanGFX";
+    case BoardConfig::DisplayController::IT8951: return "IT8951";
+    case BoardConfig::DisplayController::SSD1677:
+      return "SSD1677";
+  }
+  return "Unknown";
+}
+
 #if defined(SIMULATOR_DEVICE_READPICO)
 static constexpr const char* WINDOW_TITLE = "Simulator - Read Pico (E0470A01)";
 #elif defined(SIMULATOR_DEVICE_PICCO)
@@ -370,7 +404,11 @@ static constexpr const char *WINDOW_TITLE = "Simulator - Murphy M4 (SSD1677)";
 #elif defined(SIMULATOR_DEVICE_MOFEI_M4)
 static constexpr const char *WINDOW_TITLE = "Simulator - Mofei M4 (SSD1677)";
 #elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
-static constexpr const char *WINDOW_TITLE = "Simulator - Metalio E-Ink 4 (SSD1677)";
+static constexpr const char *WINDOW_TITLE =
+    "Simulator - Metalio E-Ink 4 (SSD1677)";
+#elif defined(SIMULATOR_DEVICE_METALIO_EINK4_PLUS)
+static constexpr const char *WINDOW_TITLE =
+    "Simulator - Metalio E-Ink 4 Plus (EPDiy)";
 #elif defined(SIMULATOR_DEVICE_PAPERMONO)
 static constexpr const char *WINDOW_TITLE =
     "Simulator - M5Stack PaperMono (SSD1677)";
@@ -434,6 +472,7 @@ void HalDisplay::begin(bool /*seamless*/) { begin(); }
 
 void HalDisplay::clearScreen(uint8_t color) const {
   memset(getFrameBuffer(), color, BUFFER_SIZE);
+  sim_screen_text::clear();
 }
 
 void HalDisplay::drawImage(const uint8_t *imageData, uint16_t x, uint16_t y,
@@ -485,14 +524,16 @@ bool HalDisplay::toggleInverted() {
 
 bool HalDisplay::isInverted() const { return inverted; }
 
-void HalDisplay::displayBuffer(RefreshMode mode, bool turnOffScreen) {
+void HalDisplay::displayBuffer(RefreshMode mode, bool turnOffScreen, DisplayRefreshContext context) {
+  refreshContext = context;
   refreshDisplay(mode, turnOffScreen);
   if (std::this_thread::get_id() == simulatorMainThread) {
     presentIfNeeded();
   }
 }
 
-void HalDisplay::displayBufferAsync(RefreshMode mode) {
+void HalDisplay::displayBufferAsync(RefreshMode mode, DisplayRefreshContext context) {
+  refreshContext = context;
   // SDL presentation is already handed off to the main thread. The framebuffer
   // conversion itself remains synchronous, so advertise no genuine overlap.
   refreshDisplay(mode, false);
@@ -514,6 +555,7 @@ void HalDisplay::refreshDisplay(RefreshMode /*mode*/, bool /*turnOffScreen*/) {
   renderBwPixels(fb);
   grayscalePreviewState.basePending = false;
   grayscalePreviewState.committed = true;
+  sim_screen_text::flush();
 }
 
 // Called from the main thread (simulator_main.cpp) to push pixels to SDL.
@@ -624,7 +666,8 @@ HalDisplay::Controller HalDisplay::getController() const {
 HalDisplay::GrayscaleCapabilities
 HalDisplay::grayscaleCapabilities(GrayscaleMode mode) const {
   if (getController() == Controller::UC8279 &&
-      BoardConfig::ACTIVE.displayControllerVariant == 0x67)
+      BoardConfig::ACTIVE.displayControllerVariant == 0x67 && !BoardConfig::isX4Pro() &&
+      !(BoardConfig::isX4Classic() && refreshContext == DisplayRefreshContext::TextOnlyAntiAliasing))
     return {};
   if (BoardConfig::isReadPico()) {
     if (mode != GrayscaleMode::Overlay)
@@ -655,9 +698,10 @@ void HalDisplay::copyGrayscaleBuffers(const uint8_t *lsbBuffer,
   copyGrayscaleMsbBuffers(msbBuffer);
 }
 void HalDisplay::displayGrayscaleBase(RefreshMode fallback,
-                                      bool turnOffScreen) {
+                                      bool turnOffScreen, DisplayRefreshContext context) {
+  refreshContext = context;
   if (!displayGrayscaleBase(GrayscaleMode::Overlay, fallback, turnOffScreen))
-    displayBuffer(fallback, turnOffScreen);
+    displayBuffer(fallback, turnOffScreen, context);
 }
 bool HalDisplay::displayGrayscaleBase(GrayscaleMode mode, RefreshMode fallback,
                                       bool turnOffScreen) {
@@ -670,7 +714,7 @@ bool HalDisplay::displayGrayscaleBase(GrayscaleMode mode, RefreshMode fallback,
     grayscalePreviewState.committed = false;
     return true;
   }
-  displayBuffer(fallback, turnOffScreen);
+  displayBuffer(fallback, turnOffScreen, refreshContext);
   return true;
 }
 void HalDisplay::preconditionGrayscale() {}
@@ -699,6 +743,7 @@ void HalDisplay::cleanupGrayscaleBuffers(const uint8_t *bwBuffer) {
     if (grayscalePreviewState.basePending) {
       renderBwPixels(bwBuffer);
       grayscalePreviewState.committed = true;
+      sim_screen_text::flush();
     }
     snapshotBwBase(bwBuffer);
   } else {
@@ -718,6 +763,7 @@ void HalDisplay::displayGrayBuffer(bool, const unsigned char *, bool) {
   composeGrayscalePreview();
   grayscalePreviewState.basePending = false;
   grayscalePreviewState.committed = true;
+  sim_screen_text::flush();
 }
 
 void HalDisplay::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t *rows,
@@ -751,7 +797,14 @@ bool HalDisplay::supportsAsyncGrayscaleBase() const {
   return grayscaleCapabilities().asyncBase;
 }
 bool HalDisplay::combinesGrayscaleBase() const {
-  return BoardConfig::isPaperMono() || BoardConfig::isReadPico();
+  return BoardConfig::isPaperMono() || BoardConfig::isReadPico() ||
+         (refreshContext == DisplayRefreshContext::TextOnlyAntiAliasing && supportsTextOnlyCombinedBase());
+}
+
+bool HalDisplay::supportsTextOnlyCombinedBase() const {
+  return !isInverted() && (BoardConfig::isPaperMono() || BoardConfig::isReadPico() ||
+      BoardConfig::isMurphyM4() || BoardConfig::isMetalioEInk4() ||
+      BoardConfig::isX4Pro() || BoardConfig::isX4Classic());
 }
 
 uint8_t HalDisplay::getGrayscaleLevels() const { return BoardConfig::ACTIVE.grayscaleLevels; }
@@ -781,6 +834,7 @@ bool HalDisplay::commitGrayscale16() {
   }
   pendingPresent.store(true);
   grayscalePreviewState.committed = true;
+  sim_screen_text::flush();
   return true;
 #else
   return false;

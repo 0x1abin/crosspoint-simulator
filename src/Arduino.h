@@ -8,12 +8,14 @@
 #include <cstdint>
 #include <random>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <thread>
 
 #include "esp_random.h"
 #include "freertos/task.h"
 #include "freertos/FreeRTOS.h"
+#include "esp_system.h"
 
 #define PROGMEM
 #define pgm_read_byte_near(address) (*(const unsigned char *)(address))
@@ -24,6 +26,8 @@
 #define SET_LOOP_TASK_STACK_SIZE(bytes)
 #define PGM_P const char *
 #define PSTR(s) (s)
+#define pgm_read_byte(addr) (*(const uint8_t *)(addr))
+#define memcpy_P(dest, src, num) memcpy((dest), (src), (num))
 
 using boolean = bool;
 

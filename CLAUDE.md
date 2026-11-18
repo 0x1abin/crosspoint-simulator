@@ -13,7 +13,8 @@ There is no build target inside this repo. Build and run happen in the consuming
 ```bash
 pio run -e simulator -t run_simulator   # build + launch
 pio run -e simulator                    # build only, then .pio/build/simulator/program
-rm -rf ./fs_/.crosspoint/               # clear stale on-disk caches after storage/cache changes
+CROSSPOINT_SIM_SD=/path/to/isolated/run-sd .pio/build/simulator/program
+# Use distinct storage roots and working directories per comparison run.
 ```
 
 For local dev against this repo, the firmware's `platformio.ini` should reference it as `simulator=symlink://../crosspoint-simulator` instead of the git URL.
@@ -36,9 +37,9 @@ The simulator is a collection of host-side reimplementations of the firmware's h
 - **SDL on main thread.** macOS requires all SDL calls to come from the main thread, but firmware drives rendering from a FreeRTOS render task. The split lives in [src/HalDisplay.cpp](src/HalDisplay.cpp): `refreshDisplay` (background thread) converts the 1bpp framebuffer to ARGB and sets an atomic `pendingPresent` flag. `presentIfNeeded` (called from `simulator_main` on the main thread) does the actual SDL upload and present. Do not call SDL render functions from anywhere else.
 - **Orientation rotation lives in two places.** The firmware's renderer rotates content into the landscape framebuffer (90 CCW for `Portrait`). The simulator undoes that with `SDL_RenderCopyEx`. If you change one, change the other. The dst rect is landscape-shaped and centre-offset because `SDL_RenderCopyEx` rotates around the dst centre.
 - **HiDPI / dithering.** Set `SDL_HINT_RENDER_SCALE_QUALITY=1` *before* `SDL_CreateTexture`, plus `SDL_WINDOW_ALLOW_HIGHDPI` and `SDL_RenderSetLogicalSize`. Without all three, Bayer-dithered grays render as harsh black/white stripes on Retina.
-- **POSIX fds, not std::fstream, in [src/HalStorage.cpp](src/HalStorage.cpp).** This was a deliberate rewrite. fstream's separate get/put pointers, eofbit-blocks-seek behaviour, and write-only seek restrictions caused several silent-corruption bugs. Do not reintroduce fstream here. All paths are prefixed with `./fs_` so the simulated filesystem stays sandboxed under the binary's working directory; `/books/` on the SD card maps to `./fs_/books/`. Directory iteration skips only the special `.` and `..` entries; firmware applies its own hidden-file policy.
+- **POSIX fds, not std::fstream, in [src/HalStorage.cpp](src/HalStorage.cpp).** This was a deliberate rewrite. fstream's separate get/put pointers, eofbit-blocks-seek behaviour, and write-only seek restrictions caused several silent-corruption bugs. Do not reintroduce fstream here. Paths use `CROSSPOINT_SIM_SD`, then `CROSSPOINT_EMU_SD`, then `./fs_`; `/books/` maps below that root. Directory iteration skips only the special `.` and `..` entries; firmware applies its own hidden-file policy.
 - **FreeRTOS shim.** [src/freertos/](src/freertos/) maps `xTaskCreate` to `std::thread`, task notifies to a condvar + counter, and `SemaphoreHandle_t` to a tagged handle with two arms, a `std::recursive_mutex` for `xSemaphoreCreateMutex` and a real binary semaphore for `xSemaphoreCreateBinary`. A `thread_local SimTaskHandle*` lets each task thread find its own handle.
-- **`_exit(0)` not `return 0`.** [src/simulator_main.cpp](src/simulator_main.cpp) ends with `_exit(0)` after `SDL_Quit()` to skip C++ global destructors. The render task is `[[noreturn]]`, so running destructors while it is mid-render races and produces a "quit unexpectedly" dialog. Keep this.
+- **`_exit(status)` after SDL shutdown.** [src/simulator_main.cpp](src/simulator_main.cpp) ends with `_exit(SimulatorLifecycle::exitCode())` after `SDL_Quit()` to skip C++ global destructors. The render task is `[[noreturn]]`, so running destructors while it is mid-render races and produces a "quit unexpectedly" dialog. Keep this.
 - **Time uses `steady_clock`.** `millis()` / `micros()` in [src/Arduino.h](src/Arduino.h) deliberately use `steady_clock`, not `system_clock`, so wall-clock changes do not perturb timing.
 
 **Host-specific code paths:**
@@ -57,6 +58,13 @@ The simulator is a collection of host-side reimplementations of the firmware's h
   [sample-platformio-linux-wsl.ini](sample-platformio-linux-wsl.ini). Keep
   both in sync when build flags change. Native Windows is not supported, WSL
   is.
+- Screen text: [run_simulator.py](run_simulator.py) adds a build middleware
+  to the firmware's `lib/GfxRenderer` builder that compiles a patched copy of
+  `GfxRenderer.cpp` from the build directory, with one
+  `simulatorScreenText()` call in `drawText()`. The firmware checkout is never
+  edited; when the anchor line is gone the original file is compiled.
+  [src/SimScreenText.cpp](src/SimScreenText.cpp) collects the strings between
+  `clearScreen()` and a refresh.
 - Linker stubs: [src/firmware_link_stubs.cpp](src/firmware_link_stubs.cpp) provides symbols the firmware expects from other translation units (uzlib checksums, HWCDC Serial shim, LUT stubs). When the firmware adds a new global-extern symbol with no simulator counterpart, add its stub here.
 
 ## Device profiles and input mapping
@@ -67,6 +75,7 @@ The simulator is a collection of host-side reimplementations of the firmware's h
 `SIMULATOR_DEVICE_STICKY` for Seeed Sticky, or
 `SIMULATOR_DEVICE_PAPERMONO` for M5Stack PaperMono, or
 `SIMULATOR_DEVICE_METALIO_EINK4` for Metalio E-Ink 4, or
+`SIMULATOR_DEVICE_METALIO_EINK4_PLUS` for Metalio E-Ink 4 Plus, or
 `SIMULATOR_DEVICE_EEGO_A4` for EEGO A4, or `SIMULATOR_DEVICE_PICCO` for Picco.
 The fork also retains
 `SIMULATOR_DEVICE_READPICO` for Read Pico and `SIMULATOR_DEVICE_MURPHY_M4`
@@ -83,9 +92,12 @@ PaperMono uses an 800x480 SSD1677 panel with FT6336-compatible touch, RTC, and
 single-channel frontlight state, without a Home key or tilt.
 
 Metalio uses an 800x480 SSD1677 panel with CST816S touch, a cover Home key,
-RTC, tilt, and haptic settings, without a frontlight. Only Confirm, Power,
-Up, and Down button contacts are available; Back/Left/Right are disabled.
-Up/Down model volume and cover Prev/Next keys. Haptic calls are host no-ops.
+RTC, tilt, and haptic settings, without a frontlight. Metalio E-Ink 4 Plus uses
+a 1216x684 EPDiy parallel panel (`uiScale = 1.5`) with FT6336U touch, a cover
+Home key, RTC, tilt, haptics, and a dual-channel PWM warm/cool frontlight. On
+both Metalio boards, only Confirm, Power, Up, and Down button contacts are
+available; Back/Left/Right are disabled. Up/Down model volume and cover
+Prev/Next keys. Haptic calls are host no-ops.
 
 EEGO A4 uses a 768x552 UC8279C panel, GSLX680 touch, RTC, Up/Down/Power
 buttons and an optional warm/cool I2C frontlight. `SIMULATOR_EEGO_NO_FRONTLIGHT`
@@ -113,6 +125,9 @@ limits. Keep the touch-controller identity aligned with the reviewed SDK's
 For repeatable QA, `CROSSPOINT_SIM_INPUT_SCRIPT` schedules synthetic key and
 touch-device edges through the same `HalGPIO` state as real SDL input, and
 `CROSSPOINT_SIM_SCREENSHOTS` captures renderer output on the SDL main thread.
+Script `WAIT` steps match firmware serial lines kept by
+[src/SimLog.cpp](src/SimLog.cpp) and start a new timing segment; `SHOT`
+requests a capture from the input path.
 Keep synthetic held-time timestamps on the `SDL_GetTicks()` clock used by real
 keyboard events; the firmware's `millis()` clock has a different origin. The
 deep-sleep loop must also process synthetic input. Process relaunch promotes
@@ -125,3 +140,21 @@ automation cannot enter an infinite sleep/relaunch cycle.
 - Adding a new Arduino/ESP-IDF symbol? Add the minimum stub to the corresponding header in [src/](src/) (e.g. [src/WiFi.h](src/WiFi.h), [src/Arduino.h](src/Arduino.h)). Match the upstream signature, return a sensible default.
 - Touching storage or caching code? After the change, `rm -rf ./fs_/.crosspoint/` in the firmware project before re-running, otherwise stale caches built by the old code will mask the fix.
 - Touching display, threading, or shutdown? Re-read the "Why the simulator's design has the shape it does" section above first. Several of those decisions undo subtle bugs that will resurface if reverted.
+
+## Reviewed integration boundaries
+
+SDK `c342aa58` has no Metalio Plus BSP. Plus remains a host profile and optional
+sample environment; it adds no firmware validation target or hardware acceptance.
+Retain Read Pico/M4, stable profile IDs, native16 and framebuffer lifecycle.
+Match geometry, uiScale and header/tab/status fields to reviewed SDK profiles
+(EEGO A4 tab Y = 8).
+
+WAIT keeps at most 4096 lines / 1 MiB of retained text and a 16 KiB prefix per
+line, plus container overhead. Raw Serial stays complete; truncated or evicted
+text may cause explicit WAIT timeout. SCREEN observes completed frames, not
+visual parity. Use whole-page screenshots with identical content, fonts, scale
+and orientation and isolated storage roots/working directories. Keep historical
+baselines. Check bounds with `bash tests/run_log_self_test.sh`.
+JSON routes are opt-in via `CROSSPOINT_SIM_HTTP_ROUTES`; offline tests set
+`"unmatched": "fail"`. Host checks, consumer builds, whole-page parity and
+physical waveform/touch/power/C3 memory acceptance are separate results.

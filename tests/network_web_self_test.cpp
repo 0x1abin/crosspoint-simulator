@@ -5,6 +5,8 @@
 #include <IPAddress.h>
 #include <NetworkClient.h>
 #include <WebServer.h>
+#include <SimHttpFetch.h>
+#include <fstream>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -70,7 +72,38 @@ class InspectableServer : public WebServer {
   }
 };
 
+static void testRoutes() {
+  const char *routes = "routes.json";
+  std::ofstream("payload.txt") << "file-body";
+  std::ofstream(routes) << R"({"unmatched":"fail","routes":[
+    {"method":"GET","url":"https://offline.test/books/*?page=*",
+     "request_headers":{"Authorization":"Bearer test-*"},"status":401,
+     "headers":{"WWW-Authenticate":"Basic realm=books"},"body":{"ok":false}},
+    {"method":"POST","url":"https://offline.test/upload","body_file":"payload.txt"}]})";
+  assert(setenv("CROSSPOINT_SIM_HTTP_ROUTES", routes, 1) == 0);
+  sim_http_fetch::Response response;
+  assert(sim_http_fetch::fetch("https://offline.test/books/a?page=2", "get",
+                             {{"authorization", "Bearer test-token"}}, "", nullptr, response));
+  assert(response.statusCode == 401 && response.body == "{\"ok\":false}");
+  assert(response.headers.size() == 1 && response.headers[0].first == "www-authenticate");
+  assert(response.headers[0].second == "Basic realm=books");
+  assert(!sim_http_fetch::fetch("https://offline.test/books/a?page=2", "GET", {}, "", nullptr, response));
+  assert(response.curlExitCode == 7);
+  assert(!sim_http_fetch::fetch("https://offline.test/upload", "GET", {}, "", nullptr, response));
+  assert(sim_http_fetch::fetch("https://offline.test/upload", "POST", {}, "", "body", response));
+  assert(response.body == "file-body");
+  std::ofstream(routes) << "{";
+  assert(!sim_http_fetch::fetch("https://offline.test/", "GET", {}, "", nullptr, response));
+  std::ofstream(routes) << R"({"routes":[]})";
+  int status = 0; std::vector<std::pair<std::string, std::string>> headers; std::string body;
+  assert(sim_http_routes::respond("https://offline.test/", "GET", {}, status, headers, body) ==
+         sim_http_routes::Result::NotHandled);
+  assert(unsetenv("CROSSPOINT_SIM_HTTP_ROUTES") == 0);
+  assert(std::remove(routes) == 0 && std::remove("payload.txt") == 0);
+}
+
 int main() {
+  testRoutes();
   uint16_t port = 0;
   int listening = listener(port);
   assert(::listen(listening, 1) == 0);

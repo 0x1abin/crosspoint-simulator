@@ -99,28 +99,34 @@ UsbDriveState HalStorage::usbDriveState() const {
 }
 bool HalStorage::usbDriveHostSuspended() const { return false; }
 
-bool HalStorage::getSpace(uint64_t &totalBytes, uint64_t &freeBytes) {
-  totalBytes = 0;
-  freeBytes = 0;
+namespace {
+struct SpaceSample {
+  uint64_t total = 0;
+  uint64_t available = 0;
+  uint64_t free = 0;
+};
 
+bool sampleSpace(SpaceSample &sample) {
   struct statvfs space {};
   if (::statvfs(storageRoot().c_str(), &space) != 0)
     return false;
-
   const uint64_t blockSize = space.f_frsize ? space.f_frsize : space.f_bsize;
-  const uint64_t maxBytes = std::numeric_limits<uint64_t>::max();
-  if (blockSize == 0 || space.f_blocks > maxBytes / blockSize ||
-      space.f_bavail > maxBytes / blockSize)
+  if (blockSize == 0 || space.f_blocks == 0 ||
+      space.f_blocks > std::numeric_limits<uint64_t>::max() / blockSize ||
+      space.f_bfree > space.f_blocks || space.f_bavail > space.f_bfree)
     return false;
-
-  const uint64_t total = space.f_blocks * blockSize;
-  const uint64_t free = space.f_bavail * blockSize;
-  if (total == 0 || free > total)
-    return false;
-
-  totalBytes = total;
-  freeBytes = free;
+  sample = {space.f_blocks * blockSize, space.f_bavail * blockSize,
+            space.f_bfree * blockSize};
   return true;
+}
+} // namespace
+
+bool HalStorage::getSpace(uint64_t &totalBytes, uint64_t &freeBytes) {
+  SpaceSample sample;
+  const bool valid = sampleSpace(sample);
+  totalBytes = sample.total;
+  freeBytes = sample.available;
+  return valid;
 }
 
 class HalFile::Impl {
@@ -563,4 +569,16 @@ std::vector<String> HalStorage::listFiles(const char *path, int maxFiles) {
   }
   closedir(dir);
   return result;
+}
+
+uint64_t HalStorage::sdTotalBytes() {
+  SpaceSample sample;
+  return sampleSpace(sample) ? sample.total : 0;
+}
+
+bool HalStorage::sdUsedBytes(uint64_t &usedBytes) {
+  SpaceSample sample;
+  const bool valid = sampleSpace(sample);
+  usedBytes = sample.total - sample.free;
+  return valid;
 }

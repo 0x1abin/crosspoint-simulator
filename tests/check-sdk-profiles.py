@@ -8,11 +8,11 @@ BODY=r'''
 #include <cstdio>
 #include <BoardConfig.h>
 int main(){const auto& p=BoardConfig::ACTIVE;
- printf("%u %u %u %u %u %u %u %u %d %u %d %u %u %u %d %u %u\n",
+ printf("%u %u %u %u %u %u %u %u %d %u %d %u %u %u %d %u %u %.3f\n",
  unsigned(p.displayWidth),unsigned(p.displayHeight),unsigned(p.displayController),unsigned(p.displayControllerVariant),
  unsigned(p.viewableInsets.top),unsigned(p.viewableInsets.right),unsigned(p.viewableInsets.bottom),unsigned(p.viewableInsets.left),
  int(p.headerOffsetY),unsigned(p.cornerRadius),int(p.tabBarOffsetY),unsigned(p.tabBarHeightPct),unsigned(p.tabBarWidthPct),
- unsigned(p.wifiMaxTxPower),int(p.statusBarOffsetY),unsigned(p.bottomCornerRadius),unsigned(p.grayscaleLevels));}
+ unsigned(p.wifiMaxTxPower),int(p.statusBarOffsetY),unsigned(p.bottomCornerRadius),unsigned(p.grayscaleLevels),double(p.uiScale));}
 '''
 with tempfile.TemporaryDirectory(prefix='sdk-simulator-profile-') as directory:
  folder=pathlib.Path(directory)

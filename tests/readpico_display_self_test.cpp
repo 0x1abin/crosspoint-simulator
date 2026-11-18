@@ -16,7 +16,18 @@
 #include <iostream>
 
 GfxRenderer renderer;
+static int panelWidth() {
+  const auto o = renderer.getOrientation();
+  return o == GfxRenderer::Portrait || o == GfxRenderer::PortraitInverted
+             ? HalDisplay::DISPLAY_HEIGHT : HalDisplay::DISPLAY_WIDTH;
+}
+static int panelHeight() {
+  const auto o = renderer.getOrientation();
+  return o == GfxRenderer::Portrait || o == GfxRenderer::PortraitInverted
+             ? HalDisplay::DISPLAY_WIDTH : HalDisplay::DISPLAY_HEIGHT;
+}
 ESPMock ESP;
+HWCDC Serial;
 
 static_assert(BoardConfig::READ_PICO.viewableInsets.top == 5 && BoardConfig::READ_PICO.viewableInsets.right == 5 &&
               BoardConfig::READ_PICO.viewableInsets.bottom == 8 && BoardConfig::READ_PICO.viewableInsets.left == 5);
@@ -53,14 +64,14 @@ static void testTouch() {
   SDL_Renderer* render = SDL_GetRenderer(window);
   assert(render);
   for (bool nativeSize : {false, true}) {
-    if (nativeSize) SDL_SetWindowSize(window, renderer.getScreenWidth(), renderer.getScreenHeight());
+    if (nativeSize) SDL_SetWindowSize(window, panelWidth(), panelHeight());
     SDL_PumpEvents();
     SDL_Delay(20);
     gpio.update();
     for (const auto& point : {std::array<int, 2>{5, 5},
-                              {renderer.getScreenWidth() - 6, 5},
-                              {5, renderer.getScreenHeight() - 6},
-                              {renderer.getScreenWidth() - 6, renderer.getScreenHeight() - 6}}) {
+                              {panelWidth() - 6, 5},
+                              {5, panelHeight() - 6},
+                              {panelWidth() - 6, panelHeight() - 6}}) {
       gpio.beginFrame();
       pushMouse(window, render, point[0], point[1], true);
       gpio.update();
@@ -189,7 +200,10 @@ int main(int argc, char** argv) {
   assert(setenv("CROSSPOINT_SIM_SCREENSHOTS", schedule.c_str(), 1) == 0);
   display.presentIfNeeded();
   SDL_Surface* image = SDL_LoadBMP(argv[2]);
-  assert(image && image->w == renderer.getScreenWidth() && image->h == renderer.getScreenHeight());
+  const bool portrait = renderer.orientation == GfxRenderer::Portrait ||
+                        renderer.orientation == GfxRenderer::PortraitInverted;
+  assert(image && image->w == (portrait ? 684 : 1216) &&
+         image->h == (portrait ? 1216 : 684));
   // Native origin is at a different corner in each oriented screenshot.
   const int originX =
       renderer.orientation == GfxRenderer::Portrait || renderer.orientation == GfxRenderer::LandscapeClockwise

@@ -7,6 +7,7 @@
 
 GfxRenderer renderer;
 ESPMock ESP;
+HWCDC Serial;
 
 #include "../src/HalDisplay.cpp"
 

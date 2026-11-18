@@ -16,6 +16,8 @@ with tempfile.TemporaryDirectory(prefix="simulator-network-test-") as directory:
                     "-I" + str(temporary), "-I" + str(root / "src"),
                     str(root / "tests/network_web_self_test.cpp"),
                     str(root / "src/NetworkClient.cpp"), str(root / "src/WebServer.cpp"),
+                    str(root / "src/SimHttpRoutes.cpp"),
+                    "-I" + os.environ["ARDUINOJSON_INCLUDE"],
                     "-o", str(binary)], check=True)
     subprocess.run([str(binary)], cwd=temporary, check=True, timeout=15)
 print("network/HTTP ownership self-test passed")
